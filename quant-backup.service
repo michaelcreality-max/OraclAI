@@ -1,0 +1,34 @@
+[Unit]
+Description=Quant Trading System - Backup Server (Gunicorn)
+After=network.target quant-primary.service
+
+[Service]
+Type=simple
+User=joanna
+Group=staff
+WorkingDirectory=/Users/joanna/Downloads/VSCode Folder (python)
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:/Users/joanna/Library/Python/3.9/bin
+Environment=PORT=5001
+Environment=FLASK_ENV=production
+Environment=PYTHONPATH=/Users/joanna/Downloads/VSCode Folder (python)
+
+# Gunicorn command for backup instance
+ExecStart=/Users/joanna/Library/Python/3.9/bin/gunicorn --config gunicorn.conf.py wsgi:application
+
+# Restart policy
+Restart=always
+RestartSec=5
+StartLimitInterval=60s
+StartLimitBurst=3
+
+# Graceful shutdown
+TimeoutStopSec=30
+KillSignal=SIGTERM
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=quant-backup
+
+[Install]
+WantedBy=multi-user.target

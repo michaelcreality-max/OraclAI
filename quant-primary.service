@@ -1,0 +1,34 @@
+[Unit]
+Description=Quant Trading System - Primary Server (Gunicorn)
+After=network.target
+
+[Service]
+Type=simple
+User=joanna
+Group=staff
+WorkingDirectory=/Users/joanna/Downloads/VSCode Folder (python)
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:/Users/joanna/Library/Python/3.9/bin
+Environment=PORT=5000
+Environment=FLASK_ENV=production
+Environment=PYTHONPATH=/Users/joanna/Downloads/VSCode Folder (python)
+
+# Gunicorn command with WSGI entry point
+ExecStart=/Users/joanna/Library/Python/3.9/bin/gunicorn --config gunicorn.conf.py wsgi:application
+
+# Restart policy
+Restart=always
+RestartSec=5
+StartLimitInterval=60s
+StartLimitBurst=3
+
+# Graceful shutdown
+TimeoutStopSec=30
+KillSignal=SIGTERM
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=quant-primary
+
+[Install]
+WantedBy=multi-user.target

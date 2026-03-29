@@ -1,0 +1,1632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ORACLE AI - System Control Panel</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/control-panel.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/system-modification.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-brand">
+                <i class="fas fa-brain brand-icon"></i>
+                <h1>ORACLE AI</h1>
+                <span class="version">v2.0</span>
+            </div>
+            <div class="header-actions">
+                <div id="user-panel" class="user-panel">
+                    <!-- User panel populated by JS -->
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Left Sidebar - Navigation -->
+            <nav class="sidebar">
+                <div class="nav-section">
+                    <h3>Dashboard</h3>
+                    <ul class="nav-list">
+                        <li class="nav-item active" data-section="overview">
+                            <i class="fas fa-chart-line"></i>
+                            <span>Overview</span>
+                        </li>
+                        <li class="nav-item" data-section="api-keys" id="nav-api-keys">
+                            <i class="fas fa-key"></i>
+                            <span>API Keys</span>
+                        </li>
+                        <li class="nav-item admin-only hidden" data-section="mode-control">
+                            <i class="fas fa-toggle-on"></i>
+                            <span>Mode Control</span>
+                        </li>
+                        <li class="nav-item admin-only hidden" data-section="system-config">
+                            <i class="fas fa-cog"></i>
+                            <span>System Config</span>
+                        </li>
+                    </ul>
+                </div>
+                <div class="nav-section admin-nav-section hidden" id="admin-nav-section">
+                    <h3><i class="fas fa-shield-alt"></i> Admin Control</h3>
+                    <ul class="nav-list">
+                        <li class="nav-item" data-section="admin-dashboard">
+                            <i class="fas fa-tachometer-alt"></i>
+                            <span>Dashboard</span>
+                        </li>
+                        <li class="nav-item" data-section="system-config">
+                            <i class="fas fa-sliders-h"></i>
+                            <span>System Config</span>
+                        </li>
+                        <li class="nav-item" data-section="system-monitoring">
+                            <i class="fas fa-chart-area"></i>
+                            <span>Monitoring</span>
+                        </li>
+                        <li class="nav-item" data-section="agent-control">
+                            <i class="fas fa-robot"></i>
+                            <span>Agent Control</span>
+                        </li>
+                        <li class="nav-item" data-section="system-modification">
+                            <i class="fas fa-cogs"></i>
+                            <span>System Modification</span>
+                        </li>
+                        <li class="nav-item" data-section="audit-log">
+                            <i class="fas fa-list-alt"></i>
+                            <span>Audit Log</span>
+                        </li>
+                        <li class="nav-item" data-section="code-editor">
+                            <i class="fas fa-code"></i>
+                            <span>Code Editor</span>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- Main Panel -->
+            <div class="panel-container">
+                <!-- System Status Card -->
+                <section class="card status-card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-heartbeat"></i> System Status</h2>
+                        <span class="status-badge" id="system-status">Checking...</span>
+                    </div>
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <label>Current Mode</label>
+                            <div class="status-value" id="current-mode">
+                                <span class="mode-indicator training">
+                                    <i class="fas fa-graduation-cap"></i> Training
+                                </span>
+                            </div>
+                        </div>
+                        <div class="status-item">
+                            <label>System Health</label>
+                            <div class="status-value" id="health-status">
+                                <span class="health-indicator healthy">
+                                    <i class="fas fa-check-circle"></i> Healthy
+                                </span>
+                            </div>
+                        </div>
+                        <div class="status-item">
+                            <label>Active Sessions</label>
+                            <div class="status-value" id="active-sessions">0</div>
+                        </div>
+                        <div class="status-item">
+                            <label>Last Update</label>
+                            <div class="status-value" id="last-update">--</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Safety Status Card -->
+                <section class="card safety-card" id="safety-status-section">
+                    <div class="card-header">
+                        <h2><i class="fas fa-shield-alt"></i> Execution Safety</h2>
+                        <span class="safety-badge" id="safety-badge">Checking...</span>
+                    </div>
+                    <div class="safety-content">
+                        <div class="safety-summary" id="safety-summary">
+                            <div class="safety-score">
+                                <span class="score-value" id="safety-score">--</span>
+                                <span class="score-label">Checks Passed</span>
+                            </div>
+                            <div class="execution-status" id="execution-status">
+                                <span class="status-text">Execution Blocked</span>
+                            </div>
+                        </div>
+                        <div class="safety-checks" id="safety-checks">
+                            <!-- Populated by JS -->
+                        </div>
+                        <div class="safety-recommendations hidden" id="safety-recommendations">
+                            <h4><i class="fas fa-lightbulb"></i> Recommendations</h4>
+                            <ul id="recommendations-list"></ul>
+                        </div>
+                        <div class="safe-mode-alert hidden" id="safe-mode-alert">
+                            <div class="alert alert-danger">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <strong>SAFE MODE ACTIVE:</strong> System auto-fallback triggered due to anomalies. Manual admin reset required.
+                            </div>
+                            <button class="btn btn-secondary" id="btn-reset-safe" onclick="resetFromSafeMode()">
+                                <i class="fas fa-undo"></i> Reset to Training Mode
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Mode Switch Card (Admin Only) -->
+                <section class="card mode-card admin-only hidden" id="mode-control-section">
+                    <div class="card-header">
+                        <h2><i class="fas fa-exchange-alt"></i> Mode Control</h2>
+                        <span class="badge warning"><i class="fas fa-shield-alt"></i> Admin Only</span>
+                    </div>
+                    <div class="mode-control-content">
+                        <div class="mode-description">
+                            <div class="mode-option" id="training-mode-info">
+                                <i class="fas fa-graduation-cap"></i>
+                                <div>
+                                    <h4>Training Mode</h4>
+                                    <p>Safe environment for testing and development. No real trades executed.</p>
+                                </div>
+                            </div>
+                            <div class="mode-option" id="execution-mode-info">
+                                <i class="fas fa-rocket"></i>
+                                <div>
+                                    <h4>Execution Mode</h4>
+                                    <p class="warning-text"><i class="fas fa-exclamation-triangle"></i> Live trading enabled. Real positions will be opened.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mode-switch-container">
+                            <label class="mode-switch">
+                                <input type="checkbox" id="mode-toggle">
+                                <span class="switch-slider">
+                                    <span class="switch-label training">Training</span>
+                                    <span class="switch-label execution">Execution</span>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- API Key Management Panel -->
+                <section class="card api-key-card" id="api-keys-section">
+                    <div class="card-header">
+                        <h2><i class="fas fa-key"></i> API Key Management</h2>
+                        <button class="btn btn-primary" id="btn-generate-key" onclick="showGenerateKeyModal()">
+                            <i class="fas fa-plus"></i> Generate Key
+                        </button>
+                    </div>
+                    <div class="api-key-content">
+                        <div class="table-container">
+                            <table class="data-table" id="api-keys-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Role</th>
+                                        <th>Created</th>
+                                        <th>Last Used</th>
+                                        <th>Requests</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="api-keys-tbody">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="empty-state hidden" id="api-keys-empty">
+                            <i class="fas fa-key"></i>
+                            <p>No API keys found. Generate your first key to get started.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Admin Dashboard Section -->
+                <section class="card admin-dashboard-card hidden" id="admin-dashboard-section">
+                    <div class="card-header">
+                        <h2><i class="fas fa-tachometer-alt"></i> Admin Dashboard</h2>
+                        <span class="badge admin"><i class="fas fa-shield-alt"></i> Admin</span>
+                    </div>
+                    <div class="admin-dashboard-content">
+                        <div class="admin-stats-grid">
+                            <div class="admin-stat">
+                                <i class="fas fa-users"></i>
+                                <div class="stat-value" id="admin-total-users">-</div>
+                                <div class="stat-label">Total Users</div>
+                            </div>
+                            <div class="admin-stat">
+                                <i class="fas fa-exchange-alt"></i>
+                                <div class="stat-value" id="admin-total-trades">-</div>
+                                <div class="stat-label">Total Trades</div>
+                            </div>
+                            <div class="admin-stat">
+                                <i class="fas fa-comments"></i>
+                                <div class="stat-value" id="admin-active-debates">-</div>
+                                <div class="stat-label">Active Debates</div>
+                            </div>
+                            <div class="admin-stat">
+                                <i class="fas fa-server"></i>
+                                <div class="stat-value" id="admin-system-uptime">-</div>
+                                <div class="stat-label">System Uptime</div>
+                            </div>
+                        </div>
+                        <div class="admin-quick-actions">
+                            <h3>Quick Actions</h3>
+                            <div class="action-buttons">
+                                <button class="btn btn-primary" onclick="showModeControl()">
+                                    <i class="fas fa-toggle-on"></i> Switch Mode
+                                </button>
+                                <button class="btn btn-secondary" onclick="showSystemConfig()">
+                                    <i class="fas fa-sliders-h"></i> Edit Config
+                                </button>
+                                <button class="btn btn-secondary" onclick="refreshSystemMetrics()">
+                                    <i class="fas fa-sync"></i> Refresh Metrics
+                                </button>
+                                <button class="btn btn-danger" onclick="triggerSafeMode()">
+                                    <i class="fas fa-shield-alt"></i> Emergency Safe Mode
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- System Config Section -->
+                <section class="card system-config-card hidden" id="system-config-section">
+                    <div class="card-header">
+                        <h2><i class="fas fa-sliders-h"></i> System Configuration</h2>
+                        <div class="header-actions">
+                            <button class="btn btn-secondary" onclick="resetConfigToDefaults()">
+                                <i class="fas fa-undo"></i> Reset to Defaults
+                            </button>
+                            <button class="btn btn-primary" onclick="saveSystemConfig()">
+                                <i class="fas fa-save"></i> Save Changes
+                            </button>
+                        </div>
+                    </div>
+                    <div class="system-config-content">
+                        <div class="config-tabs">
+                            <button class="config-tab active" data-tab="edge">Edge/Filter</button>
+                            <button class="config-tab" data-tab="risk">Risk</button>
+                            <button class="config-tab" data-tab="agents">Agents</button>
+                            <button class="config-tab" data-tab="system">System</button>
+                        </div>
+                        
+                        <div class="config-panels">
+                            <!-- Edge/Filter Config -->
+                            <div class="config-panel active" id="edge-config">
+                                <div class="config-group">
+                                    <h4>Edge Thresholds</h4>
+                                    <div class="config-field">
+                                        <label>Edge Threshold (%)</label>
+                                        <input type="number" id="cfg-edge-threshold" min="0" max="100" step="1">
+                                        <span class="help-text">Minimum edge score to allow trades</span>
+                                    </div>
+                                    <div class="config-field">
+                                        <label>Max Edge Threshold (%)</label>
+                                        <input type="number" id="cfg-max-edge-threshold" min="0" max="100" step="1">
+                                        <span class="help-text">Maximum edge threshold cap</span>
+                                    </div>
+                                    <div class="config-field">
+                                        <label>Min Confidence (0-1)</label>
+                                        <input type="number" id="cfg-min-confidence" min="0" max="1" step="0.01">
+                                        <span class="help-text">Minimum AI confidence for predictions</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Risk Config -->
+                            <div class="config-panel" id="risk-config">
+                                <div class="config-group">
+                                    <h4>Risk Limits</h4>
+                                    <div class="config-field">
+                                        <label>Max Position Risk (%)</label>
+                                        <input type="number" id="cfg-max-position-risk" min="0" max="50" step="0.1">
+                                        <span class="help-text">Maximum risk per position</span>
+                                    </div>
+                                    <div class="config-field">
+                                        <label>Max Portfolio Risk (%)</label>
+                                        <input type="number" id="cfg-max-portfolio-risk" min="0" max="50" step="0.1">
+                                        <span class="help-text">Maximum total portfolio risk</span>
+                                    </div>
+                                    <div class="config-field">
+                                        <label>Max Sector Exposure (%)</label>
+                                        <input type="number" id="cfg-max-sector-exposure" min="0" max="100" step="1">
+                                        <span class="help-text">Maximum exposure to single sector</span>
+                                    </div>
+                                    <div class="config-field">
+                                        <label>Max Single Position (%)</label>
+                                        <input type="number" id="cfg-max-single-position" min="0" max="100" step="1">
+                                        <span class="help-text">Maximum size of single position</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Agents Config -->
+                            <div class="config-panel" id="agents-config">
+                                <div class="config-group">
+                                    <h4>Agent Settings</h4>
+                                    <div class="config-field">
+                                        <label>Agent Timeout (seconds)</label>
+                                        <input type="number" id="cfg-agent-timeout" min="10" max="300" step="1">
+                                        <span class="help-text">Maximum time for agent analysis</span>
+                                    </div>
+                                    <div class="config-field">
+                                        <label>Debate Rounds</label>
+                                        <input type="number" id="cfg-debate-rounds" min="1" max="10" step="1">
+                                        <span class="help-text">Number of debate iterations</span>
+                                    </div>
+                                    <div class="config-field">
+                                        <label>Min Agent Confidence (0-1)</label>
+                                        <input type="number" id="cfg-min-agent-confidence" min="0" max="1" step="0.01">
+                                        <span class="help-text">Minimum confidence for agent stance</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- System Config -->
+                            <div class="config-panel" id="system-config-panel">
+                                <div class="config-group">
+                                    <h4>System Settings</h4>
+                                    <div class="config-field">
+                                        <label>Log Level</label>
+                                        <select id="cfg-log-level">
+                                            <option value="DEBUG">DEBUG</option>
+                                            <option value="INFO">INFO</option>
+                                            <option value="WARNING">WARNING</option>
+                                            <option value="ERROR">ERROR</option>
+                                        </select>
+                                        <span class="help-text">System logging verbosity</span>
+                                    </div>
+                                    <div class="config-field">
+                                        <label>Max Concurrent Debates</label>
+                                        <input type="number" id="cfg-max-concurrent-debates" min="1" max="100" step="1">
+                                        <span class="help-text">Maximum simultaneous debates</span>
+                                    </div>
+                                    <div class="config-field checkbox">
+                                        <label>
+                                            <input type="checkbox" id="cfg-require-validation">
+                                            Require validation for execution mode
+                                        </label>
+                                    </div>
+                                    <div class="config-field checkbox">
+                                        <label>
+                                            <input type="checkbox" id="cfg-auto-fallback">
+                                            Auto-fallback to safe mode on anomaly
+                                        </label>
+                                    </div>
+                                    <div class="config-field">
+                                        <label>Anomaly Threshold (0-1)</label>
+                                        <input type="number" id="cfg-anomaly-threshold" min="0" max="1" step="0.01">
+                                        <span class="help-text">Threshold for triggering safe mode</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="config-actions">
+                            <div class="alert alert-info hidden" id="config-unsaved-warning">
+                                <i class="fas fa-info-circle"></i> You have unsaved changes
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- System Monitoring Section -->
+                <section class="card system-monitoring-card hidden" id="system-monitoring-section">
+                    <div class="card-header">
+                        <h2><i class="fas fa-chart-area"></i> System Monitoring</h2>
+                        <div class="header-actions">
+                            <select id="metrics-time-range" onchange="loadSystemMetrics()">
+                                <option value="1">Last Hour</option>
+                                <option value="6">Last 6 Hours</option>
+                                <option value="24" selected>Last 24 Hours</option>
+                                <option value="168">Last Week</option>
+                            </select>
+                            <button class="btn btn-secondary" onclick="loadSystemMetrics()">
+                                <i class="fas fa-sync"></i> Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div class="system-monitoring-content">
+                        <div class="metrics-grid">
+                            <div class="metric-card">
+                                <h4><i class="fas fa-microchip"></i> CPU Usage</h4>
+                                <div class="metric-value" id="metric-cpu">-</div>
+                                <div class="metric-chart" id="cpu-chart"></div>
+                            </div>
+                            <div class="metric-card">
+                                <h4><i class="fas fa-memory"></i> Memory Usage</h4>
+                                <div class="metric-value" id="metric-memory">-</div>
+                                <div class="metric-chart" id="memory-chart"></div>
+                            </div>
+                            <div class="metric-card">
+                                <h4><i class="fas fa-comments"></i> Active Debates</h4>
+                                <div class="metric-value" id="metric-debates">-</div>
+                                <div class="metric-chart" id="debates-chart"></div>
+                            </div>
+                            <div class="metric-card">
+                                <h4><i class="fas fa-clock"></i> Avg Response Time</h4>
+                                <div class="metric-value" id="metric-response">-</div>
+                                <div class="metric-chart" id="response-chart"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="logs-section">
+                            <h3><i class="fas fa-list-alt"></i> System Logs</h3>
+                            <div class="log-filter">
+                                <select id="log-level-filter">
+                                    <option value="all">All Levels</option>
+                                    <option value="ERROR">Error</option>
+                                    <option value="WARNING">Warning</option>
+                                    <option value="INFO">Info</option>
+                                    <option value="DEBUG">Debug</option>
+                                </select>
+                                <button class="btn btn-secondary" onclick="loadSystemLogs()">
+                                    <i class="fas fa-sync"></i> Refresh
+                                </button>
+                            </div>
+                            <div class="logs-container" id="system-logs">
+                                <div class="log-entry info">
+                                    <span class="log-time">--:--:--</span>
+                                    <span class="log-level">INFO</span>
+                                    <span class="log-message">System logs will appear here...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Admin Dashboard Section -->
+                <section class="card admin-dashboard-card hidden" id="admin-dashboard-section">
+                    <div class="card-header">
+                        <h2><i class="fas fa-tachometer-alt"></i> Admin Dashboard</h2>
+                        <span class="badge admin"><i class="fas fa-shield-alt"></i> Admin Only</span>
+                        <div class="header-actions">
+                            <button class="btn btn-secondary" onclick="refreshAdminDashboard()">
+                                <i class="fas fa-sync"></i> Refresh
+                            </button>
+                            <button class="btn btn-primary" onclick="showRunAgentModal()">
+                                <i class="fas fa-play"></i> Run Agent
+                            </button>
+                        </div>
+                    </div>
+                    <div class="admin-dashboard-content">
+                        <!-- Dashboard Grid -->
+                        <div class="dashboard-grid">
+                            <!-- System Control Panel -->
+                            <div class="dashboard-panel system-control-panel">
+                                <div class="panel-header">
+                                    <h3><i class="fas fa-toggle-on"></i> System Control</h3>
+                                    <span class="status-indicator" id="system-mode-indicator">training</span>
+                                </div>
+                                <div class="panel-content">
+                                    <!-- Mode Switch -->
+                                    <div class="control-group">
+                                        <label>System Mode</label>
+                                        <div class="mode-switcher">
+                                            <button class="mode-btn" data-mode="training" onclick="switchSystemMode('training')">
+                                                <i class="fas fa-graduation-cap"></i>
+                                                <span>Training</span>
+                                            </button>
+                                            <button class="mode-btn" data-mode="execution" onclick="showExecutionConfirmModal()">
+                                                <i class="fas fa-rocket"></i>
+                                                <span>Execution</span>
+                                            </button>
+                                            <button class="mode-btn" data-mode="safe" onclick="switchSystemMode('safe')">
+                                                <i class="fas fa-shield-alt"></i>
+                                                <span>Safe</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Threshold Controls -->
+                                    <div class="control-group">
+                                        <label>Key Thresholds</label>
+                                        <div class="threshold-sliders">
+                                            <div class="slider-control">
+                                                <div class="slider-header">
+                                                    <span>Edge Threshold</span>
+                                                    <span class="slider-value" id="dash-edge-value">0.65</span>
+                                                </div>
+                                                <input type="range" id="dash-edge-threshold" min="0" max="1" step="0.01" value="0.65" 
+                                                       oninput="updateThresholdPreview('edge', this.value)">
+                                            </div>
+                                            <div class="slider-control">
+                                                <div class="slider-header">
+                                                    <span>Min Confidence</span>
+                                                    <span class="slider-value" id="dash-confidence-value">0.70</span>
+                                                </div>
+                                                <input type="range" id="dash-min-confidence" min="0" max="1" step="0.01" value="0.70"
+                                                       oninput="updateThresholdPreview('confidence', this.value)">
+                                            </div>
+                                            <div class="slider-control">
+                                                <div class="slider-header">
+                                                    <span>Max Risk %</span>
+                                                    <span class="slider-value" id="dash-risk-value">5.0%</span>
+                                                </div>
+                                                <input type="range" id="dash-max-risk" min="0.5" max="20" step="0.5" value="5"
+                                                       oninput="updateThresholdPreview('risk', this.value)">
+                                            </div>
+                                        </div>
+                                        <button class="btn btn-primary btn-sm btn-block" onclick="saveDashboardThresholds()">
+                                            <i class="fas fa-save"></i> Apply Thresholds
+                                        </button>
+                                    </div>
+                                    
+                                    <!-- Agent Toggles -->
+                                    <div class="control-group">
+                                        <label>Agent Status</label>
+                                        <div class="agent-toggles" id="dash-agent-toggles">
+                                            <div class="agent-toggle">
+                                                <span class="agent-name"><i class="fas fa-database"></i> Data Collector</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" id="toggle-data" checked onchange="toggleAgent('data_collection', this.checked)">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                            </div>
+                                            <div class="agent-toggle">
+                                                <span class="agent-name"><i class="fas fa-chart-line"></i> Bullish</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" id="toggle-bullish" checked onchange="toggleAgent('bullish', this.checked)">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                            </div>
+                                            <div class="agent-toggle">
+                                                <span class="agent-name"><i class="fas fa-chart-line down"></i> Bearish</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" id="toggle-bearish" checked onchange="toggleAgent('bearish', this.checked)">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                            </div>
+                                            <div class="agent-toggle">
+                                                <span class="agent-name"><i class="fas fa-exclamation-triangle"></i> Risk</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" id="toggle-risk" checked onchange="toggleAgent('risk', this.checked)">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                            </div>
+                                            <div class="agent-toggle">
+                                                <span class="agent-name"><i class="fas fa-gavel"></i> Judge</span>
+                                                <label class="toggle-switch">
+                                                    <input type="checkbox" id="toggle-judge" checked onchange="toggleAgent('judge', this.checked)">
+                                                    <span class="toggle-slider"></span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Quick Code Editor -->
+                            <div class="dashboard-panel code-panel">
+                                <div class="panel-header">
+                                    <h3><i class="fas fa-code"></i> Quick Editor</h3>
+                                    <div class="panel-actions">
+                                        <button class="btn-icon" onclick="openFullEditor()" title="Open Full Editor">
+                                            <i class="fas fa-expand"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="panel-content">
+                                    <div class="quick-file-list" id="dash-file-list">
+                                        <div class="quick-file-item" onclick="openQuickEdit('production_server.py')">
+                                            <i class="fab fa-python"></i>
+                                            <span>production_server.py</span>
+                                        </div>
+                                        <div class="quick-file-item" onclick="openQuickEdit('config.yaml')">
+                                            <i class="fas fa-cog"></i>
+                                            <span>config.yaml</span>
+                                        </div>
+                                        <div class="quick-file-item" onclick="openQuickEdit('requirements.txt')">
+                                            <i class="fas fa-file-alt"></i>
+                                            <span>requirements.txt</span>
+                                        </div>
+                                    </div>
+                                    <div class="quick-editor-container" id="dash-quick-editor">
+                                        <div class="quick-editor-header">
+                                            <span id="dash-edit-filename">Select a file</span>
+                                            <div class="quick-editor-actions">
+                                                <button class="btn-icon" onclick="saveQuickEdit()" title="Save (Ctrl+S)">
+                                                    <i class="fas fa-save"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <textarea id="dash-editor-textarea" class="quick-code-editor" placeholder="Select a file to edit..."></textarea>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Agent Control Panel -->
+                            <div class="dashboard-panel agent-panel">
+                                <div class="panel-header">
+                                    <h3><i class="fas fa-robot"></i> Agent Control</h3>
+                                    <span class="badge" id="dash-active-agents">0 Active</span>
+                                </div>
+                                <div class="panel-content">
+                                    <!-- Quick Agent Stats -->
+                                    <div class="agent-mini-stats">
+                                        <div class="mini-stat">
+                                            <i class="fas fa-check-circle"></i>
+                                            <span id="dash-total-runs">-</span>
+                                            <label>Total Runs</label>
+                                        </div>
+                                        <div class="mini-stat">
+                                            <i class="fas fa-clock"></i>
+                                            <span id="dash-avg-time">-</span>
+                                            <label>Avg Time</label>
+                                        </div>
+                                        <div class="mini-stat">
+                                            <i class="fas fa-percentage"></i>
+                                            <span id="dash-success-rate">-%</span>
+                                            <label>Success</label>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Recent Executions -->
+                                    <div class="recent-executions">
+                                        <h4>Recent Executions</h4>
+                                        <div class="execution-list" id="dash-execution-list">
+                                            <div class="execution-item">
+                                                <span class="exec-agent">Analyst</span>
+                                                <span class="exec-task">AAPL Analysis</span>
+                                                <span class="exec-status completed"><i class="fas fa-check"></i></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Quick Actions -->
+                                    <div class="quick-actions">
+                                        <button class="btn btn-primary btn-sm" onclick="showRunAgentModal()">
+                                            <i class="fas fa-play"></i> Run Agent
+                                        </button>
+                                        <button class="btn btn-secondary btn-sm" onclick="switchToSection('agent-control')">
+                                            <i class="fas fa-expand"></i> Full View
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- System Monitor Panel -->
+                            <div class="dashboard-panel monitor-panel">
+                                <div class="panel-header">
+                                    <h3><i class="fas fa-chart-area"></i> System Monitor</h3>
+                                    <span class="live-indicator"><i class="fas fa-circle"></i> LIVE</span>
+                                </div>
+                                <div class="panel-content">
+                                    <!-- Metrics Grid -->
+                                    <div class="metrics-grid">
+                                        <div class="metric-item">
+                                            <i class="fas fa-microchip"></i>
+                                            <div class="metric-value" id="dash-cpu">-</div>
+                                            <div class="metric-label">CPU %</div>
+                                        </div>
+                                        <div class="metric-item">
+                                            <i class="fas fa-memory"></i>
+                                            <div class="metric-value" id="dash-memory">-</div>
+                                            <div class="metric-label">Memory %</div>
+                                        </div>
+                                        <div class="metric-item">
+                                            <i class="fas fa-comments"></i>
+                                            <div class="metric-value" id="dash-debates">-</div>
+                                            <div class="metric-label">Debates</div>
+                                        </div>
+                                        <div class="metric-item">
+                                            <i class="fas fa-broadcast-tower"></i>
+                                            <div class="metric-value" id="dash-streams">-</div>
+                                            <div class="metric-label">Streams</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Live Log Stream -->
+                                    <div class="live-logs">
+                                        <div class="logs-header">
+                                            <h4>Live Logs</h4>
+                                            <div class="log-filters">
+                                                <button class="filter-btn active" data-level="all">All</button>
+                                                <button class="filter-btn" data-level="error">Errors</button>
+                                                <button class="filter-btn" data-level="warning">Warnings</button>
+                                            </div>
+                                        </div>
+                                        <div class="logs-stream" id="dash-logs-stream">
+                                            <div class="log-entry info">
+                                                <span class="log-time">--:--:--</span>
+                                                <span class="log-level">INFO</span>
+                                                <span class="log-msg">System ready...</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Error Alert -->
+                                    <div class="error-alert hidden" id="dash-error-alert">
+                                        <i class="fas fa-exclamation-circle"></i>
+                                        <span id="dash-error-count">0 errors in last 5 min</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Agent Control Section -->
+                <section class="card agent-control-card hidden" id="agent-control-section">
+                    <div class="card-header">
+                        <h2><i class="fas fa-robot"></i> Windsurf Agent Control</h2>
+                        <span class="badge admin"><i class="fas fa-shield-alt"></i> Admin</span>
+                        <div class="header-actions">
+                            <button class="btn btn-secondary" onclick="refreshAgentStatus()">
+                                <i class="fas fa-sync"></i> Refresh
+                            </button>
+                            <button class="btn btn-primary" onclick="showRunAgentModal()">
+                                <i class="fas fa-play"></i> Run Agent
+                            </button>
+                        </div>
+                    </div>
+                    <div class="agent-control-content">
+                        <!-- Agent Overview -->
+                        <div class="agent-overview">
+                            <div class="agent-stats-grid">
+                                <div class="agent-stat">
+                                    <i class="fas fa-robot"></i>
+                                    <div class="stat-value" id="total-agents">-</div>
+                                    <div class="stat-label">Total Agents</div>
+                                </div>
+                                <div class="agent-stat">
+                                    <i class="fas fa-check-circle"></i>
+                                    <div class="stat-value" id="registered-agents">-</div>
+                                    <div class="stat-label">Registered</div>
+                                </div>
+                                <div class="agent-stat">
+                                    <i class="fas fa-running"></i>
+                                    <div class="stat-value" id="active-executions">-</div>
+                                    <div class="stat-label">Active Runs</div>
+                                </div>
+                                <div class="agent-stat">
+                                    <i class="fas fa-history"></i>
+                                    <div class="stat-value" id="total-executions">-</div>
+                                    <div class="stat-label">Total Runs</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Agents List -->
+                        <div class="agents-list-container">
+                            <h3><i class="fas fa-list"></i> Available Agents</h3>
+                            <div class="agents-grid" id="agents-grid">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+                        
+                        <!-- Execution History -->
+                        <div class="agent-history-container">
+                            <h3><i class="fas fa-history"></i> Recent Executions</h3>
+                            <div class="table-container">
+                                <table class="data-table" id="agent-history-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Time</th>
+                                            <th>Agent</th>
+                                            <th>Task</th>
+                                            <th>Decision</th>
+                                            <th>Confidence</th>
+                                            <th>Status</th>
+                                            <th>Duration</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="agent-history-tbody">
+                                        <!-- Populated by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- System Modification Section -->
+                <section class="card system-modification-card hidden" id="system-modification-section">
+                    <div class="card-header">
+                        <h2><i class="fas fa-cogs"></i> System Self-Modification</h2>
+                        <span class="badge admin"><i class="fas fa-shield-alt"></i> Admin Only</span>
+                        <div class="header-actions">
+                            <button class="btn btn-secondary" onclick="refreshModificationStatus()">
+                                <i class="fas fa-sync"></i> Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div class="system-modification-content">
+                        <!-- Modification Stats -->
+                        <div class="modification-stats">
+                            <div class="modification-stat-grid">
+                                <div class="mod-stat">
+                                    <i class="fas fa-history"></i>
+                                    <div class="stat-value" id="mod-total-changes">-</div>
+                                    <div class="stat-label">Total Changes</div>
+                                </div>
+                                <div class="mod-stat">
+                                    <i class="fas fa-check-circle"></i>
+                                    <div class="stat-value" id="mod-applied-changes">-</div>
+                                    <div class="stat-label">Applied</div>
+                                </div>
+                                <div class="mod-stat">
+                                    <i class="fas fa-undo"></i>
+                                    <div class="stat-value" id="mod-rollback-available">-</div>
+                                    <div class="stat-label">Rollback Available</div>
+                                </div>
+                                <div class="mod-stat">
+                                    <i class="fas fa-sliders-h"></i>
+                                    <div class="stat-value" id="mod-live-params">-</div>
+                                    <div class="stat-label">Live Parameters</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Tabs -->
+                        <div class="modification-tabs">
+                            <button class="mod-tab active" data-tab="live-params">
+                                <i class="fas fa-sliders-h"></i> Live Parameters
+                            </button>
+                            <button class="mod-tab" data-tab="code-patches">
+                                <i class="fas fa-code"></i> Code Patches
+                            </button>
+                            <button class="mod-tab" data-tab="change-history">
+                                <i class="fas fa-history"></i> Change History
+                            </button>
+                        </div>
+                        
+                        <!-- Live Parameters Panel -->
+                        <div class="mod-panel active" id="live-params-panel">
+                            <div class="panel-header">
+                                <h3><i class="fas fa-sliders-h"></i> Adjustable Parameters</h3>
+                                <button class="btn btn-primary btn-sm" onclick="showRegisterParameterModal()">
+                                    <i class="fas fa-plus"></i> Register New
+                                </button>
+                            </div>
+                            <div class="parameters-list" id="parameters-list">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+                        
+                        <!-- Code Patches Panel -->
+                        <div class="mod-panel" id="code-patches-panel">
+                            <div class="panel-header">
+                                <h3><i class="fas fa-code"></i> Safe Code Patching</h3>
+                                <div class="patch-actions">
+                                    <button class="btn btn-secondary btn-sm" onclick="validateCurrentFile()">
+                                        <i class="fas fa-check-circle"></i> Validate Current File
+                                    </button>
+                                    <button class="btn btn-warning btn-sm" onclick="proposeCodeChange()">
+                                        <i class="fas fa-code-branch"></i> Propose Change
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="patch-info">
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle"></i>
+                                    <strong>Safe Patching:</strong> All code changes are validated before application. 
+                                    Syntax checking, dangerous pattern detection, and API compatibility verification are performed.
+                                </div>
+                            </div>
+                            <div class="pending-patches" id="pending-patches">
+                                <h4>Pending Changes</h4>
+                                <div class="table-container">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Time</th>
+                                                <th>File</th>
+                                                <th>Impact</th>
+                                                <th>Status</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="pending-patches-tbody">
+                                            <!-- Populated by JS -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Change History Panel -->
+                        <div class="mod-panel" id="change-history-panel">
+                            <div class="panel-header">
+                                <h3><i class="fas fa-history"></i> Modification History</h3>
+                                <div class="history-filters">
+                                    <select id="history-type-filter" onchange="loadChangeHistory()">
+                                        <option value="">All Types</option>
+                                        <option value="parameter">Parameters</option>
+                                        <option value="code_patch">Code Patches</option>
+                                        <option value="config">Configuration</option>
+                                    </select>
+                                    <select id="history-status-filter" onchange="loadChangeHistory()">
+                                        <option value="">All Status</option>
+                                        <option value="applied">Applied</option>
+                                        <option value="rolled_back">Rolled Back</option>
+                                        <option value="failed">Failed</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="change-history-list" id="change-history-list">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Audit Log Section -->
+                <section class="card audit-log-card hidden" id="audit-log-section">
+                    <div class="card-header">
+                        <h2><i class="fas fa-list-alt"></i> Audit Log</h2>
+                        <div class="header-actions">
+                            <button class="btn btn-secondary" onclick="loadAuditLog()">
+                                <i class="fas fa-sync"></i> Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div class="audit-log-content">
+                        <div class="table-container">
+                            <table class="data-table" id="audit-log-table">
+                                <thead>
+                                    <tr>
+                                        <th>Timestamp</th>
+                                        <th>Admin</th>
+                                        <th>Action</th>
+                                        <th>Details</th>
+                                        <th>IP Address</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="audit-log-tbody">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Code Editor Section -->
+                <section class="card code-editor-card hidden" id="code-editor-section">
+                    <div class="card-header">
+                        <h2><i class="fas fa-code"></i> Code Editor</h2>
+                        <span class="badge admin"><i class="fas fa-shield-alt"></i> Admin Only</span>
+                        <div class="header-actions">
+                            <button class="btn btn-secondary" onclick="refreshFileTree()">
+                                <i class="fas fa-sync"></i> Refresh
+                            </button>
+                            <button class="btn btn-warning" onclick="reloadBackend()">
+                                <i class="fas fa-redo"></i> Reload Backend
+                            </button>
+                        </div>
+                    </div>
+                    <div class="code-editor-content">
+                        <div class="editor-layout">
+                            <!-- File Tree Sidebar -->
+                            <div class="file-tree-panel">
+                                <div class="file-tree-header">
+                                    <h4><i class="fas fa-folder-tree"></i> Files</h4>
+                                    <div class="file-tree-actions">
+                                        <button class="btn-icon" onclick="createNewFile()" title="New File">
+                                            <i class="fas fa-file-plus"></i>
+                                        </button>
+                                        <button class="btn-icon" onclick="createNewFolder()" title="New Folder">
+                                            <i class="fas fa-folder-plus"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="file-tree-search">
+                                    <input type="text" id="file-search" placeholder="Search files..." onkeyup="searchFiles()">
+                                </div>
+                                <div class="file-tree" id="file-tree">
+                                    <!-- Populated by JS -->
+                                </div>
+                            </div>
+                            
+                            <!-- Editor Panel -->
+                            <div class="editor-panel">
+                                <div class="editor-tabs" id="editor-tabs">
+                                    <!-- Tab bar for open files -->
+                                </div>
+                                <div class="editor-container" id="monaco-editor-container">
+                                    <!-- Monaco Editor loads here -->
+                                    <div class="editor-placeholder">
+                                        <i class="fas fa-code"></i>
+                                        <p>Select a file from the tree to edit</p>
+                                    </div>
+                                </div>
+                                <div class="editor-status-bar">
+                                    <span id="editor-file-path">No file open</span>
+                                    <span id="editor-language">plaintext</span>
+                                    <span id="editor-line-col">Ln 1, Col 1</span>
+                                    <button class="btn btn-primary btn-sm" id="btn-save-file" onclick="saveCurrentFile()" disabled>
+                                        <i class="fas fa-save"></i> Save
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Login Modal -->
+    <div class="modal" id="login-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-lock"></i> Authentication Required</h3>
+            </div>
+            <div class="modal-body">
+                <p>Enter your API key to access the control panel.</p>
+                <div class="form-group">
+                    <label>API Key</label>
+                    <div class="input-group">
+                        <input type="password" id="login-api-key" placeholder="Enter your API key (ak_...)">
+                        <button class="btn-icon" onclick="togglePasswordVisibility('login-api-key')">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="alert alert-error hidden" id="login-error"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary btn-block" onclick="authenticate()">
+                    <i class="fas fa-sign-in-alt"></i> Login
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generate Key Modal -->
+    <div class="modal" id="generate-key-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-key"></i> Generate New API Key</h3>
+                <button class="btn-close" onclick="closeModal('generate-key-modal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Key Name</label>
+                    <input type="text" id="key-name" placeholder="e.g., Production Frontend">
+                </div>
+                <div class="form-group">
+                    <label>Role</label>
+                    <select id="key-role">
+                        <option value="user">User - Limited access</option>
+                        <option value="admin">Admin - Full access</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Rate Limit (requests/minute)</label>
+                    <input type="number" id="key-rate-limit" value="60" min="1" max="10000">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('generate-key-modal')">Cancel</button>
+                <button class="btn btn-primary" onclick="generateKey()">
+                    <i class="fas fa-plus"></i> Generate
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Key Display Modal -->
+    <div class="modal" id="new-key-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-exclamation-circle"></i> Save Your API Key</h3>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Important:</strong> This key will only be shown once. Copy it now and store it securely.
+                </div>
+                <div class="key-display">
+                    <code id="new-key-value"></code>
+                    <button class="btn btn-icon" onclick="copyNewKey()">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary btn-block" onclick="closeModal('new-key-modal'); loadApiKeys();">
+                    <i class="fas fa-check"></i> I've Saved It
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Execution Mode Confirmation Modal -->
+    <div class="modal" id="execution-confirm-modal">
+        <div class="modal-content">
+            <div class="modal-header danger">
+                <h3><i class="fas fa-exclamation-triangle"></i> Switch to Execution Mode?</h3>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger">
+                    <p><strong>Warning:</strong> You are about to enable <strong>Execution Mode</strong>.</p>
+                    <ul>
+                        <li>Real trading positions will be opened</li>
+                        <li>Actual capital will be at risk</li>
+                        <li>This action cannot be undone automatically</li>
+                    </ul>
+                </div>
+                <div class="form-group">
+                    <label>Type "EXECUTE" to confirm:</label>
+                    <input type="text" id="execution-confirm-input" placeholder="EXECUTE">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('execution-confirm-modal')">Cancel</button>
+                <button class="btn btn-danger" id="btn-confirm-execution" onclick="confirmExecutionMode()" disabled>
+                    <i class="fas fa-rocket"></i> Enable Execution Mode
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Revoke Key Confirmation Modal -->
+    <div class="modal" id="revoke-key-modal">
+        <div class="modal-content">
+            <div class="modal-header danger">
+                <h3><i class="fas fa-ban"></i> Revoke API Key?</h3>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <p>Are you sure you want to revoke this API key?</p>
+                    <p><strong id="revoke-key-name"></strong></p>
+                    <p>Any applications using this key will immediately lose access.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('revoke-key-modal')">Cancel</button>
+                <button class="btn btn-danger" onclick="confirmRevokeKey()">
+                    <i class="fas fa-ban"></i> Revoke Key
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Run Agent Modal -->
+    <div class="modal" id="run-agent-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-play"></i> Run Windsurf Agent</h3>
+                <button class="btn-close" onclick="closeModal('run-agent-modal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Select Agent</label>
+                    <select id="run-agent-id">
+                        <option value="">-- Select an agent --</option>
+                        <option value="windsurf_analyst">Windsurf Analyst - Market Analysis</option>
+                        <option value="windsurf_researcher">Windsurf Researcher - Comprehensive Research</option>
+                        <option value="windsurf_trader">Windsurf Trader - Trading Decisions</option>
+                        <option value="windsurf_risk_manager">Windsurf Risk Manager - Risk Assessment</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Task Description</label>
+                    <textarea id="run-agent-task" rows="3" placeholder="e.g., Analyze AAPL for potential breakout opportunity"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Symbol (Optional)</label>
+                    <input type="text" id="run-agent-symbol" placeholder="e.g., AAPL">
+                </div>
+                <div class="form-group">
+                    <label>Priority</label>
+                    <select id="run-agent-priority">
+                        <option value="3">High (3)</option>
+                        <option value="5" selected>Normal (5)</option>
+                        <option value="7">Low (7)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Additional Context (JSON)</label>
+                    <textarea id="run-agent-context" rows="2" placeholder='{"market_regime": "bullish", "vix_level": 15}'></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('run-agent-modal')">Cancel</button>
+                <button class="btn btn-primary" onclick="runAgent()">
+                    <i class="fas fa-play"></i> Run Agent
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Agent Result Modal -->
+    <div class="modal" id="agent-result-modal">
+        <div class="modal-content large">
+            <div class="modal-header">
+                <h3><i class="fas fa-robot"></i> Agent Execution Result</h3>
+                <button class="btn-close" onclick="closeModal('agent-result-modal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="agent-result-summary">
+                    <div class="result-badge" id="result-decision-badge">BUY</div>
+                    <div class="result-confidence">
+                        <label>Confidence</label>
+                        <div class="confidence-bar">
+                            <div class="confidence-fill" id="result-confidence-bar"></div>
+                            <span id="result-confidence-value">85%</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="agent-result-details">
+                    <div class="result-section">
+                        <h4><i class="fas fa-brain"></i> Reasoning</h4>
+                        <p id="result-reasoning"></p>
+                    </div>
+                    <div class="result-section">
+                        <h4><i class="fas fa-microchip"></i> Internal State</h4>
+                        <pre id="result-internal-state"></pre>
+                    </div>
+                    <div class="result-section">
+                        <h4><i class="fas fa-list"></i> Execution Logs</h4>
+                        <div class="logs-container" id="result-logs"></div>
+                    </div>
+                    <div class="result-section" id="result-warnings-section">
+                        <h4><i class="fas fa-exclamation-triangle"></i> Warnings</h4>
+                        <ul id="result-warnings"></ul>
+                    </div>
+                    <div class="result-section" id="result-errors-section">
+                        <h4><i class="fas fa-times-circle"></i> Errors</h4>
+                        <ul id="result-errors"></ul>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('agent-result-modal')">Close</button>
+                <button class="btn btn-primary" onclick="rerunAgent()">
+                    <i class="fas fa-redo"></i> Run Again
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Agent Config Modal -->
+    <div class="modal" id="agent-config-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-cog"></i> Agent Configuration</h3>
+                <button class="btn-close" onclick="closeModal('agent-config-modal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="config-agent-id">
+                <div class="form-group">
+                    <label>Max Iterations</label>
+                    <input type="number" id="config-max-iterations" min="1" max="50">
+                    <span class="help-text">Maximum execution iterations before timeout</span>
+                </div>
+                <div class="form-group">
+                    <label>Timeout (seconds)</label>
+                    <input type="number" id="config-timeout" min="10" max="600">
+                    <span class="help-text">Maximum execution time</span>
+                </div>
+                <div class="form-group">
+                    <label>Confidence Threshold (0-1)</label>
+                    <input type="number" id="config-confidence-threshold" min="0" max="1" step="0.01">
+                    <span class="help-text">Minimum confidence to accept decisions</span>
+                </div>
+                <div class="form-group">
+                    <label>Auto-Approve Confidence (0-1)</label>
+                    <input type="number" id="config-auto-approve" min="0" max="1" step="0.01">
+                    <span class="help-text">Confidence level for automatic approval</span>
+                </div>
+                <div class="form-group checkbox">
+                    <label>
+                        <input type="checkbox" id="config-loop-detection">
+                        Enable Loop Detection
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('agent-config-modal')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveAgentConfig()">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Admin Login Modal -->
+    <div class="modal" id="admin-login-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-shield-alt"></i> Admin Login</h3>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    Default admin: michael.creality@gmail.com
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="admin-email" placeholder="admin@example.com" value="michael.creality@gmail.com">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <div class="input-group">
+                        <input type="password" id="admin-password" placeholder="Enter password">
+                        <button class="btn-icon" onclick="togglePasswordVisibility('admin-password')">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="alert alert-error hidden" id="admin-login-error"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="showApiKeyLogin()">Use API Key Instead</button>
+                <button class="btn btn-primary" onclick="adminLogin()">
+                    <i class="fas fa-sign-in-alt"></i> Login as Admin
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Password Change Modal (Required on first login) -->
+    <div class="modal" id="password-change-modal">
+        <div class="modal-content">
+            <div class="modal-header warning">
+                <h3><i class="fas fa-exclamation-triangle"></i> Change Required</h3>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-shield-alt"></i>
+                    <strong>Security Required:</strong> You must change your password before continuing.
+                </div>
+                <div class="form-group">
+                    <label>Current Password</label>
+                    <input type="password" id="current-password" placeholder="Enter current password">
+                </div>
+                <div class="form-group">
+                    <label>New Password</label>
+                    <input type="password" id="new-password" placeholder="Min 8 chars, upper, lower, digit">
+                    <span class="help-text">Password must be at least 8 characters with uppercase, lowercase, and digit</span>
+                </div>
+                <div class="form-group">
+                    <label>Confirm New Password</label>
+                    <input type="password" id="confirm-password" placeholder="Confirm new password">
+                </div>
+                <div class="alert alert-error hidden" id="password-change-error"></div>
+                <div class="alert alert-success hidden" id="password-change-success"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="adminLogout()">Logout</button>
+                <button class="btn btn-primary" onclick="changeAdminPassword()">
+                    <i class="fas fa-key"></i> Change Password
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Parameter Modal -->
+    <div class="modal" id="edit-parameter-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-sliders-h"></i> Edit Live Parameter</h3>
+                <button class="btn-close" onclick="closeModal('edit-parameter-modal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="edit-param-name">
+                <div class="form-group">
+                    <label>Parameter Name</label>
+                    <input type="text" id="edit-param-display-name" disabled>
+                </div>
+                <div class="form-group">
+                    <label>Current Value</label>
+                    <input type="text" id="edit-param-current-value" disabled>
+                </div>
+                <div class="form-group">
+                    <label>New Value</label>
+                    <input type="text" id="edit-param-new-value">
+                    <span class="help-text" id="edit-param-help"></span>
+                </div>
+                <div class="form-group">
+                    <label>Reason for Change</label>
+                    <textarea id="edit-param-reason" rows="2" placeholder="Why are you changing this parameter?"></textarea>
+                </div>
+                <div class="alert alert-warning" id="edit-param-restart-warning" style="display: none;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    This parameter requires a system restart to take effect.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('edit-parameter-modal')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveParameterChange()">
+                    <i class="fas fa-save"></i> Save Change
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Register Parameter Modal -->
+    <div class="modal" id="register-parameter-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-plus"></i> Register New Parameter</h3>
+                <button class="btn-close" onclick="closeModal('register-parameter-modal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Parameter Name</label>
+                    <input type="text" id="reg-param-name" placeholder="e.g., max_concurrent_analysis">
+                </div>
+                <div class="form-group">
+                    <label>Default Value</label>
+                    <input type="text" id="reg-param-default" placeholder="e.g., 5">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" id="reg-param-desc" placeholder="What does this parameter control?">
+                </div>
+                <div class="form-group">
+                    <label>Category</label>
+                    <select id="reg-param-category">
+                        <option value="general">General</option>
+                        <option value="risk">Risk</option>
+                        <option value="agent">Agent</option>
+                        <option value="threshold">Threshold</option>
+                        <option value="weight">Weight</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Min Value (optional)</label>
+                        <input type="number" id="reg-param-min">
+                    </div>
+                    <div class="form-group">
+                        <label>Max Value (optional)</label>
+                        <input type="number" id="reg-param-max">
+                    </div>
+                </div>
+                <div class="form-group checkbox">
+                    <label>
+                        <input type="checkbox" id="reg-param-restart">
+                        Requires System Restart
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('register-parameter-modal')">Cancel</button>
+                <button class="btn btn-primary" onclick="registerNewParameter()">
+                    <i class="fas fa-plus"></i> Register Parameter
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Change Details Modal -->
+    <div class="modal" id="change-details-modal">
+        <div class="modal-content large">
+            <div class="modal-header">
+                <h3><i class="fas fa-info-circle"></i> Change Details</h3>
+                <button class="btn-close" onclick="closeModal('change-details-modal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="change-detail-header">
+                    <div class="change-id">
+                        <label>Change ID</label>
+                        <code id="detail-change-id"></code>
+                    </div>
+                    <div class="change-status" id="detail-status"></div>
+                </div>
+                <div class="change-detail-grid">
+                    <div class="detail-item">
+                        <label>Type</label>
+                        <span id="detail-type"></span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Target</label>
+                        <span id="detail-target"></span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Admin</label>
+                        <span id="detail-admin"></span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Timestamp</label>
+                        <span id="detail-timestamp"></span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Impact Score</label>
+                        <span id="detail-impact"></span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Rollback Available</label>
+                        <span id="detail-rollback"></span>
+                    </div>
+                </div>
+                <div class="change-values">
+                    <div class="value-box">
+                        <label>Old Value</label>
+                        <pre id="detail-old-value"></pre>
+                    </div>
+                    <div class="value-box">
+                        <label>New Value</label>
+                        <pre id="detail-new-value"></pre>
+                    </div>
+                </div>
+                <div class="change-reason">
+                    <label>Reason</label>
+                    <p id="detail-reason"></p>
+                </div>
+                <div class="change-logs" id="detail-logs-section">
+                    <label>Change Logs</label>
+                    <div class="logs-container" id="detail-logs"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('change-details-modal')">Close</button>
+                <button class="btn btn-warning" id="detail-rollback-btn" onclick="rollbackSelectedChange()">
+                    <i class="fas fa-undo"></i> Rollback Change
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Code Validation Modal -->
+    <div class="modal" id="code-validation-modal">
+        <div class="modal-content large">
+            <div class="modal-header">
+                <h3><i class="fas fa-check-circle"></i> Code Validation Results</h3>
+                <button class="btn-close" onclick="closeModal('code-validation-modal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="validation-summary" id="validation-summary">
+                    <div class="validation-status" id="validation-status"></div>
+                    <div class="impact-score">
+                        <label>Impact Score</label>
+                        <div class="score-bar">
+                            <div class="score-fill" id="validation-score-bar"></div>
+                            <span id="validation-score-value"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="safety-checks" id="validation-safety-checks">
+                    <!-- Populated by JS -->
+                </div>
+                <div class="validation-errors" id="validation-errors-section">
+                    <h4><i class="fas fa-times-circle"></i> Errors</h4>
+                    <ul id="validation-errors-list"></ul>
+                </div>
+                <div class="validation-warnings" id="validation-warnings-section">
+                    <h4><i class="fas fa-exclamation-triangle"></i> Warnings</h4>
+                    <ul id="validation-warnings-list"></ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('code-validation-modal')">Close</button>
+                <button class="btn btn-primary" id="btn-apply-patch" onclick="applyValidatedPatch()">
+                    <i class="fas fa-check"></i> Apply Change
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs/loader.js"></script>
+    <script src="{{ url_for('static', filename='js/control-panel.js') }}"></script>
+</body>
+</html>

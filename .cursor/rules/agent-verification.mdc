@@ -1,0 +1,45 @@
+---
+description: Run project verification after changes and after subagent work completes
+alwaysApply: true
+---
+
+# Agent verification (this project)
+
+Before treating work as **done**, run the project verifier from the repo root:
+
+```bash
+./scripts/verify.sh
+```
+
+Or: `make check` (same as `./scripts/verify.sh`).
+
+- If you changed HTTP behavior or dependencies, fix failures and re-run until it passes.
+- Optional live market smoke test (needs internet): `./scripts/verify.sh --network` or `make verify-network`.
+
+## After other agents / parallel tasks
+
+When Cursor subagents or parallel edits finish a batch:
+
+1. Re-run `./scripts/verify.sh`.
+2. If it fails, fix or delegate fixes, then verify again.
+3. Do not close the task while verification is red.
+
+## Long-running sessions
+
+To poll until green (e.g. while other agents are still editing), run in a terminal:
+
+```bash
+./scripts/wait_for_verify.sh
+```
+
+Adjust poll interval with `VERIFY_INTERVAL=10` (seconds). Stop with Ctrl+C.
+
+## Four-agent quant ecosystem (`quant_ecosystem/`)
+
+After changing Alpha / Arena / Reality / Meta code, run the **fast** check (no network, no full training loop):
+
+```bash
+./scripts/verify_quant_light.sh
+```
+
+Or `make verify-quant-light`. A full cycle is slow (CLI: `python run_ecosystem.py SYMBOL`); use that when you need an end-to-end integration run.
