@@ -248,6 +248,11 @@ def home():
 # Control Panel UI
 from flask import render_template
 
+@app.route('/')
+def index():
+    """Serve the main landing page"""
+    return render_template('index.html')
+
 @app.route('/control')
 def control_panel():
     """Serve the system control panel UI"""
@@ -267,6 +272,9 @@ def classify():
         return jsonify({"error": "Input required"}), 400
     
     # Classification logic
+    input_lower = user_input.lower()
+    
+    # Single stock ticker (1-5 uppercase letters)
     if len(user_input) <= 5 and user_input.isalpha():
         return jsonify({
             "type": "single_stock",
@@ -275,27 +283,108 @@ def classify():
             "description": "Stock analysis request - will start multi-agent debate",
             "pipeline": "multi_agent_debate"
         })
-    elif any(word in user_input.lower() for word in ['top', 'best', 'ranking']):
+    
+    # Ranking/Recommendation queries - expanded patterns
+    ranking_keywords = ['top', 'best', 'ranking', 'picks', 'recommendations', 'suggest', 
+                       'what should', 'which stocks', 'good stocks', 'buy now', 'invest in',
+                       'portfolio', 'add to watchlist', 'worth buying']
+    if any(word in input_lower for word in ranking_keywords):
         return jsonify({
             "type": "ranking",
             "confidence": 0.85,
-            "description": "Stock ranking request",
-            "pipeline": "stock_ranking"
+            "description": "Stock ranking/recommendation request",
+            "pipeline": "stock_ranking",
+            "message": "I'll analyze the market and provide top stock recommendations based on multi-agent consensus."
         })
-    elif any(word in user_input.lower() for word in ['hidden', 'gem', 'discover']):
+    
+    # Hidden gem/Discovery queries
+    discovery_keywords = ['hidden', 'gem', 'discover', 'undervalued', 'under the radar',
+                         'overlooked', 'potential', 'up and coming', 'breakout',
+                         'early stage', 'growth opportunities']
+    if any(word in input_lower for word in discovery_keywords):
         return jsonify({
             "type": "discovery",
             "confidence": 0.85,
             "description": "Hidden gem discovery request",
             "pipeline": "hidden_gem_detection"
         })
-    else:
+    
+    # Market analysis/general questions
+    market_keywords = ['market', 'trend', 'outlook', 'forecast', 'prediction', 
+                        'bull', 'bear', 'correction', 'rally', 'recession']
+    if any(word in input_lower for word in market_keywords):
         return jsonify({
-            "type": "unknown",
-            "confidence": 0.3,
-            "description": "Unclear request",
-            "suggestions": ["Try: AAPL", "Try: analyze MSFT", "Try: hidden gems"]
+            "type": "market_analysis",
+            "confidence": 0.80,
+            "description": "Market trend/outlook analysis",
+            "pipeline": "market_analysis",
+            "message": "I'll analyze current market conditions and trends using all available agents."
         })
+    
+    # Analysis/Research queries
+    analysis_keywords = ['analyze', 'research', 'look at', 'check', 'how is', 'what about',
+                        'thoughts on', 'opinion on', 'review', 'assessment']
+    if any(word in input_lower for word in analysis_keywords):
+        # Try to extract ticker from the query
+        words = user_input.split()
+        for word in words:
+            clean = word.strip('.,!?;').upper()
+            if 1 <= len(clean) <= 5 and clean.isalpha() and clean not in ['HOW', 'WHAT', 'IS', 'ARE', 'THE', 'FOR', 'THIS', 'THAT']:
+                return jsonify({
+                    "type": "single_stock",
+                    "ticker": clean,
+                    "confidence": 0.75,
+                    "description": f"Stock analysis request for {clean}",
+                    "pipeline": "multi_agent_debate"
+                })
+        
+        # No ticker found, ask for clarification
+        return jsonify({
+            "type": "needs_clarification",
+            "confidence": 0.60,
+            "description": "Analysis request but no specific stock identified",
+            "message": "I can analyze a specific stock for you. Which ticker symbol would you like me to analyze?",
+            "suggestions": ["AAPL", "MSFT", "NVDA", "TSLA", "AMZN"]
+        })
+    
+    # Portfolio/Account related
+    portfolio_keywords = ['my portfolio', 'holdings', 'positions', 'pnl', 'performance',
+                         'how am i doing', 'my trades', 'my account']
+    if any(word in input_lower for word in portfolio_keywords):
+        return jsonify({
+            "type": "portfolio_query",
+            "confidence": 0.85,
+            "description": "User portfolio information request",
+            "pipeline": "portfolio_analysis"
+        })
+    
+    # Help/Info requests
+    help_keywords = ['help', 'how do', 'how to', 'what can', 'capabilities', 
+                     'what do you do', 'who are you', 'explain']
+    if any(word in input_lower for word in help_keywords):
+        return jsonify({
+            "type": "help_request",
+            "confidence": 0.90,
+            "description": "User requesting help or information",
+            "message": "I'm OraclAI, a multi-agent AI trading system. I can:\n\n• Analyze any stock (e.g., 'AAPL' or 'analyze Microsoft')\n• Find top stock picks (e.g., 'best stocks this week')\n• Discover hidden gems (e.g., 'undervalued stocks')\n• Analyze market trends\n• Review your portfolio\n\nWhat would you like to explore?",
+            "suggestions": ["Top picks", "Analyze AAPL", "Market outlook", "Hidden gems"]
+        })
+    
+    # If still unclear, try to be helpful rather than failing
+    return jsonify({
+        "type": "general_query",
+        "confidence": 0.50,
+        "description": "General query - attempting LLM interpretation",
+        "message": "I want to help with your trading question. Could you clarify what you're looking for?",
+        "suggestions": [
+            "Try: 'Best stocks this week'",
+            "Try: 'Analyze AAPL'", 
+            "Try: 'Hidden gems'",
+            "Try: 'Market outlook'",
+            "Try: 'What should I buy?'"
+        ],
+        "fallback": "I can route this to my general LLM processor for broader interpretation."
+    })
 
 # Start multi-agent debate
 @app.route('/api/v1/debate/start', methods=['POST'])
