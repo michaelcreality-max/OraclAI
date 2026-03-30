@@ -248,10 +248,142 @@ def home():
 # Control Panel UI
 from flask import render_template
 
+HTML_LANDING = '''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OraclAI - AI Trading System</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #e5e5e5;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+        .container {
+            max-width: 800px;
+            text-align: center;
+        }
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(90deg, #f97316, #f59e0b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        p {
+            color: #9ca3af;
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: #111;
+            border: 1px solid #222;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #10b981;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #f97316;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #ea580c;
+        }
+        .btn-secondary {
+            background: #1f2937;
+            color: #e5e5e5;
+            border: 1px solid #374151;
+        }
+        .btn-secondary:hover {
+            background: #374151;
+        }
+        .endpoints {
+            margin-top: 3rem;
+            text-align: left;
+            background: #111;
+            border: 1px solid #222;
+            padding: 1.5rem;
+            border-radius: 8px;
+        }
+        .endpoints h3 {
+            color: #f97316;
+            margin-bottom: 1rem;
+        }
+        .endpoint {
+            font-family: monospace;
+            font-size: 0.9rem;
+            color: #9ca3af;
+            margin: 0.5rem 0;
+        }
+        .endpoint span {
+            color: #10b981;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="status">
+            <div class="status-dot"></div>
+            <span>Backend API Running</span>
+        </div>
+        <h1>OraclAI</h1>
+        <p>Multi-Agent AI Trading System<br>Backend API Server</p>
+        <div class="buttons">
+            <a href="/control" class="btn btn-primary">Open Dashboard</a>
+            <a href="/api/health" class="btn btn-secondary">API Health Check</a>
+        </div>
+        <div class="endpoints">
+            <h3>Available Endpoints</h3>
+            <div class="endpoint"><span>POST</span> /api/v1/classify - Classify user input</div>
+            <div class="endpoint"><span>POST</span> /api/v1/debate/start - Start multi-agent debate</div>
+            <div class="endpoint"><span>GET</span> /api/v1/debate/stream/{id} - Stream debate results</div>
+            <div class="endpoint"><span>GET</span> /api/health - Health check</div>
+        </div>
+    </div>
+</body>
+</html>'''
+
 @app.route('/')
 def index():
     """Serve the main landing page"""
-    return render_template('index.html')
+    return HTML_LANDING
 
 @app.route('/control')
 def control_panel():
@@ -676,27 +808,6 @@ if __name__ == "__main__":
         log.info(f"🔄 System Self-Modification: {len(default_params)} live parameters registered")
     except Exception as e:
         log.error(f"❌ Self-modification initialization error: {e}")
-    
-    # Test system on startup
-    try:
-        log.info("🧪 Running startup tests...")
-        
-        # Test data collection
-        test_data = data_collection_agent.collect_initial_data("AAPL")
-        if "error" not in test_data:
-            log.info("✅ Data Collection Agent: Operational")
-        
-        # Test orchestrator
-        log.info(f"✅ Multi-Agent Orchestrator: {len(orchestrator.active_sessions)} active sessions")
-        
-        # Test US market
-        stock_count = len(us_market.get_all_stocks())
-        log.info(f"✅ US Market Universe: {stock_count} stocks loaded")
-        
-        log.info("✅ All systems operational!")
-        
-    except Exception as e:
-        log.error(f"❌ Startup test error: {e}")
     
     # Run production server
     # Use threaded=True for handling multiple concurrent requests
