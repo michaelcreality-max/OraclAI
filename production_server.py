@@ -538,19 +538,21 @@ def read_file_admin():
 
 @app.route('/api/admin/files/write', methods=['POST'])
 def write_file_admin():
-    """Write file contents"""
+    """Write file contents and auto-commit to git"""
     if not session.get('is_admin'):
         return jsonify({"error": "Admin access required"}), 403
     
     data = request.get_json() or {}
     filepath = data.get('path')
     content = data.get('content')
+    auto_commit = data.get('auto_commit', True)  # Default to auto-commit
     
     if not filepath or content is None:
         return jsonify({"error": "Path and content required"}), 400
     
     try:
         # Create backup before writing
+        backup_path = None
         if os.path.exists(filepath):
             backup_path = filepath + '.backup.' + str(int(time.time()))
             with open(filepath, 'r', encoding='utf-8') as f:
@@ -558,14 +560,52 @@ def write_file_admin():
             with open(backup_path, 'w', encoding='utf-8') as f:
                 f.write(old_content)
         
+        # Write new content
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(content)
+        
+        # Auto-commit to git for persistence
+        git_result = None
+        if auto_commit:
+            try:
+                import subprocess
+                # Add the file
+                subprocess.run(['git', 'add', filepath], cwd='.', capture_output=True, timeout=10)
+                # Commit with descriptive message
+                commit_msg = f"Edit {filepath} via web editor"
+                result = subprocess.run(
+                    ['git', 'commit', '-m', commit_msg],
+                    cwd='.',
+                    capture_output=True,
+                    timeout=10
+                )
+                if result.returncode == 0:
+                    # Try to push (may fail if no remote, that's ok)
+                    push_result = subprocess.run(
+                        ['git', 'push', 'origin', 'main'],
+                        cwd='.',
+                        capture_output=True,
+                        timeout=30
+                    )
+                    git_result = {
+                        'committed': True,
+                        'message': commit_msg,
+                        'pushed': push_result.returncode == 0
+                    }
+                else:
+                    git_result = {'committed': False, 'error': result.stderr.decode()[:200]}
+            except Exception as git_err:
+                git_result = {'committed': False, 'error': str(git_err)[:200]}
         
         return jsonify({
             "success": True,
             "message": "File saved successfully",
             "path": filepath,
-            "size": len(content)
+            "size": len(content),
+            "backup_created": backup_path is not None,
+            "backup_path": backup_path,
+            "git": git_result,
+            "local_path": os.path.abspath(filepath)
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

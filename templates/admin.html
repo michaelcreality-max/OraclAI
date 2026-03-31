@@ -914,17 +914,28 @@
             }
             
             const content = document.getElementById('fileEditor').value;
-            document.getElementById('editorStatus').textContent = 'Saving...';
+            document.getElementById('editorStatus').textContent = 'Saving to local filesystem...';
             
             try {
                 const response = await fetch('/api/admin/files/write', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ path: currentFilePath, content: content })
+                    body: JSON.stringify({ path: currentFilePath, content: content, auto_commit: true })
                 });
                 const data = await response.json();
                 if (data.success) {
-                    document.getElementById('editorStatus').textContent = `Saved ${data.size} bytes ✓`;
+                    let statusMsg = `✓ Saved to disk (${data.size} bytes)`;
+                    if (data.backup_created) {
+                        statusMsg += ` • Backup created`;
+                    }
+                    if (data.git && data.git.committed) {
+                        statusMsg += ` • Committed to git`;
+                        if (data.git.pushed) {
+                            statusMsg += ` & pushed`;
+                        }
+                    }
+                    document.getElementById('editorStatus').innerHTML = statusMsg + `<br><small style="color: var(--text-secondary);">${data.local_path}</small>`;
+                    
                     // Trigger Windsurf to apply changes
                     await applyWindsurfChanges();
                 } else {
