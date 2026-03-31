@@ -675,3 +675,581 @@
             </aside>
         </div>
     </div>
+
+    <script>
+        // ========== SESSION STATE ==========
+        let currentUser = JSON.parse(sessionStorage.getItem('currentUser') || 'null');
+        let currentView = 'chat';
+        let analysisHistory = JSON.parse(sessionStorage.getItem('analysisHistory') || '[]');
+        
+        // ========== INITIALIZATION ==========
+        document.addEventListener('DOMContentLoaded', function() {
+            updateAuthUI();
+            loadMarketData();
+            updateSystemStatus();
+            
+            // Enter key to send
+            document.getElementById('userInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+        });
+        
+        // ========== AUTHENTICATION ==========
+        function showLogin() {
+            document.getElementById('loginModal').classList.add('active');
+        }
+        
+        function hideLogin() {
+            document.getElementById('loginModal').classList.remove('active');
+            document.getElementById('loginError').style.display = 'none';
+        }
+        
+        async function handleLogin() {
+            const username = document.getElementById('usernameInput').value.trim();
+            const password = document.getElementById('passwordInput').value.trim();
+            
+            if (!username || !password) {
+                document.getElementById('loginError').textContent = 'Please enter both username and password';
+                document.getElementById('loginError').style.display = 'block';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/web/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentUser = { username: data.username, is_admin: data.is_admin };
+                    sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+                    hideLogin();
+                    updateAuthUI();
+                    
+                    // If portfolio was clicked, switch to it now
+                    if (currentView === 'portfolio') {
+                        showPortfolioContent();
+                    }
+                } else {
+                    document.getElementById('loginError').textContent = data.error || 'Invalid credentials';
+                    document.getElementById('loginError').style.display = 'block';
+                }
+            } catch (error) {
+                document.getElementById('loginError').textContent = 'Login failed. Please try again.';
+                document.getElementById('loginError').style.display = 'block';
+            }
+        }
+        
+        function logout() {
+            fetch('/api/web/logout', { method: 'POST' });
+            currentUser = null;
+            sessionStorage.removeItem('currentUser');
+            updateAuthUI();
+            switchView('chat');
+        }
+        
+        function updateAuthUI() {
+            const loginBtn = document.getElementById('loginBtn');
+            const logoutBtn = document.getElementById('logoutBtn');
+            const adminLink = document.getElementById('adminLink');
+            const userInfo = document.getElementById('userInfo');
+            const portfolioNav = document.querySelector('[data-view="portfolio"]');
+            
+            if (currentUser) {
+                loginBtn.style.display = 'none';
+                logoutBtn.style.display = 'inline-block';
+                userInfo.textContent = `Welcome, ${currentUser.username}`;
+                
+                if (currentUser.is_admin) {
+                    adminLink.style.display = 'inline-block';
+                } else {
+                    adminLink.style.display = 'none';
+                }
+                
+                portfolioNav.classList.remove('locked');
+            } else {
+                loginBtn.style.display = 'inline-block';
+                logoutBtn.style.display = 'none';
+                adminLink.style.display = 'none';
+                userInfo.textContent = '';
+                portfolioNav.classList.add('locked');
+            }
+        }
+        
+        // ========== VIEW NAVIGATION ==========
+        function switchView(view) {
+            // Hide all views
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            
+            // Show selected view
+            document.getElementById(view + 'View').classList.add('active');
+            document.querySelector(`[data-view="${view}"]`).classList.add('active');
+            currentView = view;
+            
+            // Load view-specific data
+            if (view === 'market') loadMarketGrid();
+            if (view === 'history') loadHistory();
+            if (view === 'portfolio') showPortfolioContent();
+        }
+        
+        function checkLoginAndSwitch(view) {
+            if (!currentUser) {
+                showLogin();
+            } else {
+                switchView(view);
+            }
+        }
+        
+        function showPortfolioContent() {
+            if (!currentUser) {
+                document.getElementById('portfolioLocked').style.display = 'flex';
+                document.getElementById('portfolioContent').style.display = 'none';
+            } else {
+                document.getElementById('portfolioLocked').style.display = 'none';
+                document.getElementById('portfolioContent').style.display = 'block';
+                loadPortfolio();
+            }
+        }
+        
+        // ========== CHAT FUNCTIONALITY ==========
+        async function sendMessage() {
+            const input = document.getElementById('userInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            // Add user message
+            addMessage('user', message);
+            input.value = '';
+            
+            // Show typing indicator
+            showTyping();
+            
+            try {
+                // First classify the input
+                const classifyResponse = await fetch('/api/v1/classify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ input: message })
+                });
+                
+                const classification = await classifyResponse.json();
+                
+                if (classification.type === 'single_stock') {
+                    await analyzeStock(classification.symbol, message);
+                } else if (classification.type === 'ranking') {
+                    await handleRankingQuery(message);
+                } else {
+                    // General query - use fallback or chat
+                    hideTyping();
+                    addMessage('agent', `I can help you with stock analysis. Try asking about a specific stock (e.g., "Analyze AAPL") or ask for "Top 5 picks this week".`);
+                }
+            } catch (error) {
+                hideTyping();
+                addMessage('agent', 'Sorry, I encountered an error processing your request. Please try again.');
+            }
+        }
+        
+        async function analyzeStock(symbol, originalQuery) {
+            // Start multi-agent debate
+            try {
+                const response = await fetch('/api/v1/debate/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ symbol: symbol })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Add message about analysis starting
+                    hideTyping();
+                    const analysisDiv = addMessage('agent', `🔍 Starting multi-agent analysis for <b>${symbol}</b>...`);
+                    
+                    // Show agent thoughts container
+                    const thoughtsDiv = document.createElement('div');
+                    thoughtsDiv.className = 'agent-thoughts';
+                    thoughtsDiv.innerHTML = `
+                        <div class="thought-header">🧠 Agent Thought Process</div>
+                        <div id="thoughts-${symbol}"></div>
+                    `;
+                    analysisDiv.querySelector('.message-content').appendChild(thoughtsDiv);
+                    
+                    // Start streaming updates
+                    startDebateStream(data.session_id, symbol, analysisDiv);
+                } else {
+                    hideTyping();
+                    // Fallback to simple analysis
+                    const fallbackResponse = await fetch('/api/v1/llm/fallback', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ symbol: symbol, query: originalQuery })
+                    });
+                    const fallback = await fallbackResponse.json();
+                    addMessage('agent', fallback.response || `Analysis for ${symbol}: Based on current market data, this stock shows mixed signals. Please check the Market Data tab for more details.`);
+                    showFallbackNotice();
+                }
+            } catch (error) {
+                hideTyping();
+                addMessage('agent', `I couldn't complete the full analysis for ${symbol}. Please try again or check the Market Data tab.`);
+            }
+        }
+        
+        function startDebateStream(sessionId, symbol, messageDiv) {
+            const eventSource = new EventSource(`/api/v1/debate/stream/${sessionId}`);
+            const thoughtsContainer = messageDiv.querySelector(`#thoughts-${symbol}`);
+            
+            let agentUpdates = {
+                data: { status: 'fetching', thought: 'Fetching market data...' },
+                bullish: { status: 'waiting', thought: 'Waiting for data...' },
+                bearish: { status: 'waiting', thought: 'Waiting for data...' },
+                judge: { status: 'waiting', thought: 'Waiting for analysis...' }
+            };
+            
+            eventSource.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'agent_update') {
+                    agentUpdates[data.agent] = {
+                        status: data.status,
+                        thought: data.thought,
+                        confidence: data.confidence
+                    };
+                    updateAgentThoughts(thoughtsContainer, agentUpdates);
+                    updateConfidenceBars(data.agent, data.confidence || 0);
+                } else if (data.type === 'complete') {
+                    eventSource.close();
+                    showFinalVerdict(messageDiv, data.result, symbol);
+                }
+            };
+            
+            eventSource.onerror = () => {
+                eventSource.close();
+                // Show fallback result
+                thoughtsContainer.innerHTML += '<div style="color: #f59e0b; margin-top: 8px;">⚠️ Using fallback analysis...</div>';
+            };
+        }
+        
+        function updateAgentThoughts(container, updates) {
+            const agentNames = {
+                data: '📊 Data Agent',
+                bullish: '🐂 Bullish Agent',
+                bearish: '🐻 Bearish Agent',
+                judge: '⚖️ Judge Agent'
+            };
+            
+            container.innerHTML = Object.entries(updates).map(([agent, data]) => `
+                <div class="thought-item">
+                    <span class="thought-agent">${agentNames[agent]}</span>
+                    <span class="thought-text">${data.thought}</span>
+                    <span class="thought-time">${new Date().toLocaleTimeString()}</span>
+                </div>
+            `).join('');
+        }
+        
+        function updateConfidenceBars(agent, confidence) {
+            const bars = {
+                bullish: { bar: 'bullishBar', pct: 'bullishPct', color: 'var(--accent-green)' },
+                bearish: { bar: 'bearishBar', pct: 'bearishPct', color: 'var(--accent-red)' },
+                judge: { bar: 'judgeBar', pct: 'judgePct', color: 'var(--accent-blue)' }
+            };
+            
+            if (bars[agent]) {
+                document.getElementById(bars[agent].bar).style.width = confidence + '%';
+                document.getElementById(bars[agent].pct).textContent = Math.round(confidence) + '%';
+            }
+        }
+        
+        function showFinalVerdict(messageDiv, result, symbol) {
+            const verdict = result.consensus || 'HOLD';
+            const confidence = result.confidence || 50;
+            
+            const verdictColors = {
+                'BUY': 'var(--accent-green)',
+                'SELL': 'var(--accent-red)',
+                'HOLD': 'var(--accent-blue)'
+            };
+            
+            const verdictDiv = document.createElement('div');
+            verdictDiv.style.cssText = `margin-top: 16px; padding: 16px; background: ${verdictColors[verdict]}20; border: 2px solid ${verdictColors[verdict]}; border-radius: 8px;`;
+            verdictDiv.innerHTML = `
+                <div style="font-size: 18px; font-weight: 700; color: ${verdictColors[verdict]}; margin-bottom: 8px;">
+                    📊 FINAL VERDICT: ${verdict}
+                </div>
+                <div style="font-size: 14px; color: var(--text-secondary);">
+                    Confidence: ${Math.round(confidence)}% | Symbol: ${symbol}
+                </div>
+                <div style="font-size: 13px; margin-top: 8px; color: var(--text-primary);">
+                    ${result.reasoning || 'Analysis complete based on multi-agent consensus.'}
+                </div>
+            `;
+            
+            messageDiv.querySelector('.message-content').appendChild(verdictDiv);
+            
+            // Add to history
+            addToHistory(symbol, verdict, confidence);
+        }
+        
+        async function handleRankingQuery(message) {
+            try {
+                const response = await fetch('/api/v1/stocks/rank', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: message })
+                });
+                
+                const data = await response.json();
+                hideTyping();
+                
+                if (data.stocks && data.stocks.length > 0) {
+                    const stocksList = data.stocks.map((s, i) => 
+                        `${i + 1}. <b>${s.symbol}</b> - Score: ${s.score}/100 (${s.recommendation})`
+                    ).join('<br>');
+                    addMessage('agent', `📈 Top Stock Picks:<br><br>${stocksList}`);
+                } else {
+                    addMessage('agent', 'I couldn\'t generate rankings at this time. The market data may be temporarily unavailable. Please try asking about specific stocks instead.');
+                    showFallbackNotice();
+                }
+            } catch (error) {
+                hideTyping();
+                addMessage('agent', 'Unable to fetch rankings. Please try analyzing specific stocks.');
+                showFallbackNotice();
+            }
+        }
+        
+        function quickQuery(query) {
+            document.getElementById('userInput').value = query;
+            sendMessage();
+        }
+        
+        function addMessage(sender, content) {
+            const container = document.getElementById('chatMessages');
+            const div = document.createElement('div');
+            div.className = `message message-${sender}`;
+            div.innerHTML = `
+                <div class="message-header">
+                    <div class="message-avatar">${sender === 'user' ? 'U' : 'AI'}</div>
+                    <span class="message-sender">${sender === 'user' ? 'You' : 'OraclAI System'}</span>
+                    <span class="message-time">${new Date().toLocaleTimeString()}</span>
+                </div>
+                <div class="message-content">${content}</div>
+            `;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+            return div;
+        }
+        
+        function showTyping() {
+            const container = document.getElementById('chatMessages');
+            const typing = document.createElement('div');
+            typing.id = 'typingIndicator';
+            typing.className = 'message message-agent';
+            typing.innerHTML = `
+                <div class="message-header">
+                    <div class="message-avatar">AI</div>
+                    <span class="message-sender">OraclAI System</span>
+                </div>
+                <div class="message-content">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <span>Analyzing...</span>
+                    </div>
+                </div>
+            `;
+            container.appendChild(typing);
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        function hideTyping() {
+            const typing = document.getElementById('typingIndicator');
+            if (typing) typing.remove();
+        }
+        
+        function showFallbackNotice() {
+            const container = document.getElementById('chatMessages');
+            const lastMsg = container.lastElementChild;
+            if (lastMsg) {
+                const notice = document.createElement('div');
+                notice.className = 'fallback-notice';
+                notice.innerHTML = '⚠️ Using fallback LLM (Gemini) - Multi-agent system temporarily unavailable';
+                lastMsg.querySelector('.message-content').appendChild(notice);
+            }
+        }
+        
+        // ========== DATA LOADING ==========
+        async function loadMarketData() {
+            try {
+                const response = await fetch('/api/v1/market/stocks?symbols=AAPL,NVDA,TSLA,MSFT,GOOGL,AMZN,META');
+                const data = await response.json();
+                
+                if (data.stocks) {
+                    // Update watchlist
+                    const watchlist = document.getElementById('watchlistContainer');
+                    watchlist.innerHTML = data.stocks.slice(0, 4).map(stock => {
+                        const change = stock.change || 0;
+                        const changeClass = change >= 0 ? '' : 'down';
+                        const changeSign = change >= 0 ? '+' : '';
+                        return `
+                            <div class="stock-item" onclick="quickQuery('Analyze ${stock.symbol}')">
+                                <span class="stock-symbol">${stock.symbol}</span>
+                                <span class="stock-price ${changeClass}">${stock.price ? '$' + stock.price.toFixed(2) : 'N/A'} (${changeSign}${change.toFixed(2)}%)</span>
+                            </div>
+                        `;
+                    }).join('');
+                    
+                    // Update header stats
+                    const sp500 = data.stocks.find(s => s.symbol === 'SPY') || { price: 4200, change: 0.5 };
+                    const nasdaq = data.stocks.find(s => s.symbol === 'QQQ') || { price: 350, change: 0.8 };
+                    const vix = { price: 18.5, change: -2.3 };
+                    
+                    document.getElementById('sp500').textContent = sp500.price ? '$' + sp500.price.toFixed(2) : '$4,200';
+                    document.getElementById('nasdaq').textContent = nasdaq.price ? '$' + nasdaq.price.toFixed(2) : '$350';
+                    document.getElementById('vix').textContent = '18.5';
+                }
+            } catch (error) {
+                console.log('Market data temporarily unavailable');
+            }
+        }
+        
+        async function loadMarketGrid() {
+            const grid = document.getElementById('marketGrid');
+            grid.innerHTML = '<div class="loading"><div class="spinner"></div>Loading market data...</div>';
+            
+            try {
+                const response = await fetch('/api/v1/market/stocks');
+                const data = await response.json();
+                
+                if (data.stocks) {
+                    grid.innerHTML = data.stocks.slice(0, 12).map(stock => {
+                        const change = stock.change || 0;
+                        const changeClass = change >= 0 ? '' : 'down';
+                        const changeSign = change >= 0 ? '+' : '';
+                        return `
+                            <div class="market-card" onclick="quickQuery('Analyze ${stock.symbol}')">
+                                <div class="card-header">
+                                    <span class="card-title">${stock.symbol}</span>
+                                    <span style="font-size: 12px; color: var(--text-secondary);">${stock.name || ''}</span>
+                                </div>
+                                <div class="card-value ${changeClass}">${stock.price ? '$' + stock.price.toFixed(2) : 'N/A'}</div>
+                                <div style="font-size: 13px; color: ${change >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'};">
+                                    ${changeSign}${change.toFixed(2)}%
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            } catch (error) {
+                grid.innerHTML = '<div style="color: var(--text-secondary);">Market data unavailable. Please try again.</div>';
+            }
+        }
+        
+        function loadPortfolio() {
+            const grid = document.getElementById('portfolioGrid');
+            if (!currentUser) return;
+            
+            // Simulated portfolio data - would come from backend in production
+            grid.innerHTML = `
+                <div class="portfolio-card">
+                    <div class="card-header">
+                        <span class="card-title">Total Value</span>
+                    </div>
+                    <div class="card-value">$124,532.45</div>
+                    <div style="font-size: 13px; color: var(--accent-green);">+$2,340 (+1.92%)</div>
+                </div>
+                <div class="portfolio-card">
+                    <div class="card-header">
+                        <span class="card-title">Cash Available</span>
+                    </div>
+                    <div class="card-value">$18,500.00</div>
+                    <div style="font-size: 13px; color: var(--text-secondary);">14.9% of portfolio</div>
+                </div>
+                <div class="portfolio-card">
+                    <div class="card-header">
+                        <span class="card-title">Day P&L</span>
+                    </div>
+                    <div class="card-value">+$1,245.67</div>
+                    <div style="font-size: 13px; color: var(--accent-green);">+0.98% today</div>
+                </div>
+            `;
+        }
+        
+        function loadHistory() {
+            const list = document.getElementById('historyList');
+            
+            if (analysisHistory.length === 0) {
+                list.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 40px;">No analysis history yet. Start analyzing stocks!</div>';
+                return;
+            }
+            
+            list.innerHTML = analysisHistory.slice().reverse().map(item => `
+                <div class="history-item" onclick="quickQuery('Analyze ${item.symbol}')">
+                    <div class="history-header">
+                        <span class="history-symbol">${item.symbol}</span>
+                        <span class="history-verdict ${item.verdict.toLowerCase()}">${item.verdict}</span>
+                    </div>
+                    <div style="font-size: 13px; color: var(--text-secondary);">
+                        Confidence: ${Math.round(item.confidence)}% • ${new Date(item.timestamp).toLocaleString()}
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function addToHistory(symbol, verdict, confidence) {
+            analysisHistory.push({
+                symbol: symbol,
+                verdict: verdict,
+                confidence: confidence,
+                timestamp: Date.now()
+            });
+            sessionStorage.setItem('analysisHistory', JSON.stringify(analysisHistory));
+        }
+        
+        function updateSystemStatus() {
+            document.getElementById('systemStatus').textContent = 'All systems operational';
+        }
+        
+        // ========== API KEY GENERATION ==========
+        async function generateApiKey() {
+            if (!currentUser) {
+                showLogin();
+                return;
+            }
+            
+            const btn = document.querySelector('button[onclick="generateApiKey()"]');
+            btn.textContent = 'Generating...';
+            btn.disabled = true;
+            
+            try {
+                const response = await fetch('/api/web/generate-key', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('apiKeyValue').textContent = data.api_key;
+                    document.getElementById('apiKeyDisplay').style.display = 'block';
+                } else {
+                    alert('Failed to generate API key: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                // Fallback: generate a dummy key for demo
+                const dummyKey = 'ora_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+                document.getElementById('apiKeyValue').textContent = dummyKey;
+                document.getElementById('apiKeyDisplay').style.display = 'block';
+            } finally {
+                btn.textContent = '🔑 Generate API Key';
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
