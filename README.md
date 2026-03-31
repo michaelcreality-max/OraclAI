@@ -1,4 +1,4 @@
-# Quant Trading AI System
+# OraclAI - Multi-Agent Quantitative Trading System
 
 A production-ready multi-agent AI system for quantitative trading analysis with real-time debate, risk management, and execution safety controls.
 
@@ -58,8 +58,8 @@ pip3
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/quant-trading-ai.git
-cd quant-trading-ai
+git clone https://github.com/michaelcreality-max/OraclAI.git
+cd OraclAI
 
 # Install dependencies
 pip3 install -r requirements.txt
@@ -152,7 +152,7 @@ python3 generate_api_key.py
 ## 📁 Project Structure
 
 ```
-quant-trading-ai/
+OraclAI/
 ├── production_server.py      # Main Flask application
 ├── backup_server.py          # Backup server instance
 ├── wsgi.py                   # WSGI entry point

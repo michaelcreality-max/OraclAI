@@ -14,7 +14,7 @@ def generate_admin_api_key():
     """Generate unlimited admin API key for frontend."""
     
     print("="*60)
-    print("QUANT SYSTEM - API KEY GENERATOR")
+    print("OraclAI - API KEY GENERATOR")
     print("="*60)
     
     # Generate key with unlimited rate limit
@@ -59,11 +59,10 @@ if __name__ == "__main__":
         
         # Test the key
         print("\n🔍 Testing key validation...")
-        from quant_ecosystem.api_key_manager import validate_api_key
+        api_key = api_key_manager.validate_key(key)
         
-        is_valid, role, _ = validate_api_key(key)
-        if is_valid:
-            print(f"✅ Key is valid! Role: {role.value}")
+        if api_key:
+            print(f"✅ Key is valid! Role: {api_key.role.value}")
         else:
             print("❌ Key validation failed")
             
