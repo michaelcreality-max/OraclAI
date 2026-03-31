@@ -278,8 +278,200 @@ def terminal():
 
 @app.route('/admin')
 def admin_dashboard():
-    """Serve the admin dashboard"""
+    """Serve the admin dashboard - requires admin login"""
+    # Check if user is logged in as admin
+    if not session.get('is_admin'):
+        # Return login page instead
+        return HTML_ADMIN_LOGIN
     return render_template('admin.html')
+
+# Simple admin credentials (in production, use proper auth)
+ADMIN_USERNAME = "MK1"
+ADMIN_PASSWORD = "123456"
+
+@app.route('/api/web/login', methods=['POST'])
+def web_login():
+    """Login endpoint for web users"""
+    data = request.get_json() or {}
+    username = data.get('username', '')
+    password = data.get('password', '')
+    
+    if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+        session['user_id'] = str(uuid.uuid4())
+        session['username'] = username
+        session['is_admin'] = True
+        return jsonify({
+            "success": True,
+            "user": {
+                "username": username,
+                "role": "admin",
+                "isAdmin": True
+            }
+        })
+    else:
+        return jsonify({
+            "success": False,
+            "error": "Invalid credentials"
+        }), 401
+
+@app.route('/api/web/logout', methods=['POST'])
+def web_logout():
+    """Logout endpoint"""
+    session.clear()
+    return jsonify({"success": True})
+
+@app.route('/api/web/session', methods=['GET'])
+def get_session():
+    """Get current session info"""
+    if session.get('username'):
+        return jsonify({
+            "success": True,
+            "user": {
+                "username": session.get('username'),
+                "role": "admin" if session.get('is_admin') else "user",
+                "isAdmin": session.get('is_admin', False)
+            }
+        })
+    return jsonify({"success": False, "error": "Not logged in"}), 401
+
+HTML_ADMIN_LOGIN = '''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login | OraclAI</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'SF Mono', monospace;
+            background: #0a0a0a;
+            color: #ffffff;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-container {
+            background: #111111;
+            border: 1px solid #27272a;
+            border-radius: 12px;
+            padding: 40px;
+            width: 400px;
+            text-align: center;
+        }
+        .logo {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #f97316, #f59e0b);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            font-weight: bold;
+            margin: 0 auto 20px;
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+        p {
+            color: #a1a1aa;
+            margin-bottom: 24px;
+        }
+        .form-group {
+            margin-bottom: 16px;
+            text-align: left;
+        }
+        label {
+            display: block;
+            font-size: 12px;
+            color: #a1a1aa;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+        }
+        input {
+            width: 100%;
+            background: #1a1a1a;
+            border: 1px solid #27272a;
+            border-radius: 6px;
+            padding: 12px;
+            color: #ffffff;
+            font-family: inherit;
+            font-size: 14px;
+        }
+        input:focus {
+            outline: none;
+            border-color: #f97316;
+        }
+        button {
+            width: 100%;
+            background: #f97316;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+        button:hover {
+            background: #ea580c;
+        }
+        .error {
+            color: #ef4444;
+            font-size: 12px;
+            margin-top: 12px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">O</div>
+        <h1>Admin Access</h1>
+        <p>OraclAI System Control Panel</p>
+        <form onsubmit="return handleLogin(event)">
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="username" placeholder="Enter username" required>
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="password" placeholder="Enter password" required>
+            </div>
+            <button type="submit">Login</button>
+            <div class="error" id="error">Invalid credentials</div>
+        </form>
+    </div>
+    <script>
+        async function handleLogin(e) {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch('/api/web/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    document.getElementById('error').style.display = 'block';
+                }
+            } catch (error) {
+                document.getElementById('error').style.display = 'block';
+            }
+        }
+    </script>
+</body>
+</html>'''
 
 # Web UI API endpoints - NO API KEY REQUIRED for direct user access
 @app.route('/api/web/chat', methods=['POST'])

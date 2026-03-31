@@ -30,7 +30,6 @@
             grid-template-rows: 50px 1fr 70px;
             height: 100vh;
         }
-        /* Header */
         .header {
             background: var(--bg-secondary);
             border-bottom: 1px solid var(--border-color);
@@ -61,23 +60,21 @@
             background: linear-gradient(90deg, var(--accent-orange), #f59e0b);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
         .header-stats {
             display: flex;
             gap: 24px;
             font-size: 12px;
         }
-        .stat {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
+        .stat { display: flex; align-items: center; gap: 6px; }
         .stat-label { color: var(--text-secondary); }
         .stat-value { color: var(--accent-green); font-weight: 600; }
         .stat-value.down { color: var(--accent-red); }
         .header-actions {
             display: flex;
             gap: 12px;
+            align-items: center;
         }
         .btn-header {
             background: var(--bg-tertiary);
@@ -94,13 +91,62 @@
             border-color: var(--accent-orange);
             color: var(--text-primary);
         }
-        /* Main Content */
+        .user-info {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-right: 12px;
+        }
+        .login-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-overlay.active { display: flex; }
+        .login-modal {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 40px;
+            width: 400px;
+        }
+        .login-title { font-size: 24px; font-weight: 700; margin-bottom: 8px; text-align: center; }
+        .login-subtitle { color: var(--text-secondary); font-size: 14px; margin-bottom: 24px; text-align: center; }
+        .form-group { margin-bottom: 16px; }
+        .form-label { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; }
+        .form-input {
+            width: 100%;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 12px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 14px;
+        }
+        .form-input:focus { outline: none; border-color: var(--accent-orange); }
+        .btn-login {
+            width: 100%;
+            background: var(--accent-orange);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+        .btn-login:hover { background: #ea580c; }
+        .login-error { color: var(--accent-red); font-size: 12px; margin-top: 12px; text-align: center; display: none; }
         .main-content {
             display: grid;
             grid-template-columns: 280px 1fr 320px;
             overflow: hidden;
         }
-        /* Sidebar */
         .sidebar {
             background: var(--bg-secondary);
             border-right: 1px solid var(--border-color);
@@ -125,17 +171,23 @@
             align-items: center;
             gap: 10px;
             transition: all 0.2s;
+            color: var(--text-secondary);
         }
         .nav-item:hover, .nav-item.active {
             background: var(--bg-tertiary);
             color: var(--accent-orange);
         }
-        .nav-item.active {
-            border-left: 3px solid var(--accent-orange);
+        .nav-item.active { border-left: 3px solid var(--accent-orange); }
+        .nav-item.locked {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
-        .watchlist {
-            margin-top: 24px;
+        .nav-item.locked::after {
+            content: '🔒';
+            margin-left: auto;
+            font-size: 10px;
         }
+        .watchlist { margin-top: 24px; }
         .stock-item {
             display: flex;
             justify-content: space-between;
@@ -144,22 +196,32 @@
             font-size: 13px;
             cursor: pointer;
         }
-        .stock-item:hover {
-            background: var(--bg-tertiary);
-        }
+        .stock-item:hover { background: var(--bg-tertiary); }
         .stock-symbol { font-weight: 600; }
         .stock-price { color: var(--accent-green); }
         .stock-price.down { color: var(--accent-red); }
-        /* Chat Area */
-        .chat-container {
+        .content-area {
             display: flex;
             flex-direction: column;
             background: var(--bg-primary);
+            overflow: hidden;
+        }
+        .view {
+            display: none;
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+        }
+        .view.active { display: block; }
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
         }
         .chat-messages {
             flex: 1;
             overflow-y: auto;
-            padding: 24px;
+            padding-bottom: 16px;
         }
         .message {
             margin-bottom: 20px;
@@ -186,20 +248,10 @@
             justify-content: center;
             font-size: 12px;
         }
-        .message-user .message-avatar {
-            background: var(--accent-orange);
-        }
-        .message-agent .message-avatar {
-            background: var(--accent-blue);
-        }
-        .message-sender {
-            font-weight: 600;
-            font-size: 12px;
-        }
-        .message-time {
-            color: var(--text-secondary);
-            font-size: 11px;
-        }
+        .message-user .message-avatar { background: var(--accent-orange); }
+        .message-agent .message-avatar { background: var(--accent-blue); }
+        .message-sender { font-weight: 600; font-size: 12px; }
+        .message-time { color: var(--text-secondary); font-size: 11px; }
         .message-content {
             background: var(--bg-secondary);
             border: 1px solid var(--border-color);
@@ -214,6 +266,37 @@
             color: white;
             border: none;
         }
+        .agent-thoughts {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            margin: 12px 0;
+        }
+        .thought-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .thought-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 12px;
+        }
+        .thought-item:last-child { border-bottom: none; }
+        .thought-agent {
+            width: 60px;
+            flex-shrink: 0;
+            font-weight: 600;
+        }
+        .thought-text { color: var(--text-secondary); flex: 1; }
+        .thought-time { color: var(--text-secondary); font-size: 10px; }
         .fallback-notice {
             background: linear-gradient(90deg, #8b5cf6, #a78bfa);
             color: white;
@@ -248,10 +331,7 @@
             min-height: 50px;
             max-height: 120px;
         }
-        .input-box:focus {
-            outline: none;
-            border-color: var(--accent-orange);
-        }
+        .input-box:focus { outline: none; border-color: var(--accent-orange); }
         .btn-send {
             background: var(--accent-orange);
             color: white;
@@ -265,9 +345,7 @@
             justify-content: center;
             transition: all 0.2s;
         }
-        .btn-send:hover {
-            background: #ea580c;
-        }
+        .btn-send:hover { background: #ea580c; }
         .quick-actions {
             display: flex;
             gap: 8px;
@@ -288,16 +366,37 @@
             border-color: var(--accent-orange);
             color: var(--accent-orange);
         }
-        /* Right Panel */
+        .portfolio-grid, .market-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+        }
+        .portfolio-card, .market-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .card-title { font-size: 16px; font-weight: 600; }
+        .card-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--accent-green);
+        }
+        .card-value.down { color: var(--accent-red); }
         .right-panel {
             background: var(--bg-secondary);
             border-left: 1px solid var(--border-color);
             padding: 20px;
             overflow-y: auto;
         }
-        .panel-section {
-            margin-bottom: 24px;
-        }
+        .panel-section { margin-bottom: 24px; }
         .agent-status {
             display: flex;
             align-items: center;
@@ -362,130 +461,175 @@
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .history-list { display: flex; flex-direction: column; gap: 12px; }
+        .history-item {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            cursor: pointer;
         }
-        /* Scrollbar */
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
+        .history-item:hover { border-color: var(--accent-orange); }
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
         }
-        ::-webkit-scrollbar-track {
-            background: var(--bg-primary);
+        .history-symbol { font-weight: 600; font-size: 16px; }
+        .history-verdict {
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
         }
-        ::-webkit-scrollbar-thumb {
-            background: var(--border-color);
-            border-radius: 3px;
+        .history-verdict.buy { background: rgba(16, 185, 129, 0.2); color: var(--accent-green); }
+        .history-verdict.sell { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); }
+        .history-verdict.hold { background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-primary); }
+        ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+        .locked-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-secondary);
+            text-align: center;
         }
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--text-secondary);
-        }
-        /* Responsive */
-        @media (max-width: 1200px) {
-            .main-content { grid-template-columns: 240px 1fr 280px; }
-        }
-        @media (max-width: 900px) {
-            .main-content { grid-template-columns: 1fr; }
-            .sidebar, .right-panel { display: none; }
-        }
+        .locked-icon { font-size: 48px; margin-bottom: 16px; }
+        .locked-text { font-size: 18px; margin-bottom: 8px; }
+        .locked-hint { font-size: 14px; opacity: 0.7; }
     </style>
 </head>
 <body>
+    <div class="login-overlay" id="loginModal">
+        <div class="login-modal">
+            <div class="login-title">🔐 Login Required</div>
+            <div class="login-subtitle">Advanced features require authentication</div>
+            <div class="form-group">
+                <label class="form-label">Username</label>
+                <input type="text" class="form-input" id="usernameInput" placeholder="Enter username">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <input type="password" class="form-input" id="passwordInput" placeholder="Enter password">
+            </div>
+            <button class="btn-login" onclick="handleLogin()">Login</button>
+            <div class="login-error" id="loginError">Invalid credentials</div>
+        </div>
+    </div>
+
     <div class="terminal-container">
         <header class="header">
             <div class="logo">
                 <div class="logo-icon">O</div>
                 <div class="logo-text">ORACLAI</div>
             </div>
-            <div class="header-stats">
+            <div class="header-stats" id="marketStats">
                 <div class="stat">
                     <span class="stat-label">S&P 500</span>
-                    <span class="stat-value">4,783.45 ▲ 0.82%</span>
+                    <span class="stat-value" id="sp500">Loading...</span>
                 </div>
                 <div class="stat">
                     <span class="stat-label">NASDAQ</span>
-                    <span class="stat-value">15,123.67 ▲ 1.12%</span>
+                    <span class="stat-value" id="nasdaq">Loading...</span>
                 </div>
                 <div class="stat">
                     <span class="stat-label">VIX</span>
-                    <span class="stat-value down">14.23 ▼ 2.1%</span>
+                    <span class="stat-value down" id="vix">Loading...</span>
                 </div>
             </div>
             <div class="header-actions">
-                <a href="/admin" class="btn-header">Admin</a>
-                <button class="btn-header" onclick="toggleTheme()">Theme</button>
+                <span class="user-info" id="userInfo"></span>
+                <button class="btn-header" onclick="showLogin()" id="loginBtn">Login</button>
+                <a href="/admin" class="btn-header" id="adminLink" style="display:none;">Admin</a>
+                <button class="btn-header" onclick="logout()" id="logoutBtn" style="display:none;">Logout</button>
             </div>
         </header>
         
         <div class="main-content">
             <aside class="sidebar">
                 <div class="section-title">Navigation</div>
-                <div class="nav-item active" data-view="chat">
+                <div class="nav-item active" onclick="switchView('chat')" data-view="chat">
                     <span>💬</span> Trading Terminal
                 </div>
-                <div class="nav-item" data-view="portfolio">
+                <div class="nav-item locked" onclick="checkLoginAndSwitch('portfolio')" data-view="portfolio">
                     <span>📊</span> Portfolio
                 </div>
-                <div class="nav-item" data-view="market">
+                <div class="nav-item" onclick="switchView('market')" data-view="market">
                     <span>📈</span> Market Data
                 </div>
-                <div class="nav-item" data-view="history">
+                <div class="nav-item" onclick="switchView('history')" data-view="history">
                     <span>📜</span> History
                 </div>
-                
                 <div class="watchlist">
                     <div class="section-title">Watchlist</div>
-                    <div class="stock-item">
-                        <span class="stock-symbol">AAPL</span>
-                        <span class="stock-price">$195.89 ▲ 1.2%</span>
-                    </div>
-                    <div class="stock-item">
-                        <span class="stock-symbol">NVDA</span>
-                        <span class="stock-price">$495.22 ▲ 3.4%</span>
-                    </div>
-                    <div class="stock-item">
-                        <span class="stock-symbol">TSLA</span>
-                        <span class="stock-price down">$238.45 ▼ 0.8%</span>
-                    </div>
-                    <div class="stock-item">
-                        <span class="stock-symbol">MSFT</span>
-                        <span class="stock-price">$378.91 ▲ 0.5%</span>
+                    <div id="watchlistContainer">
+                        <div class="stock-item"><span class="stock-symbol">AAPL</span><span class="stock-price">Loading...</span></div>
+                        <div class="stock-item"><span class="stock-symbol">NVDA</span><span class="stock-price">Loading...</span></div>
+                        <div class="stock-item"><span class="stock-symbol">TSLA</span><span class="stock-price">Loading...</span></div>
+                        <div class="stock-item"><span class="stock-symbol">MSFT</span><span class="stock-price">Loading...</span></div>
                     </div>
                 </div>
             </aside>
             
-            <main class="chat-container">
-                <div class="chat-messages" id="chatMessages">
-                    <div class="message message-agent">
-                        <div class="message-header">
-                            <div class="message-avatar">AI</div>
-                            <span class="message-sender">OraclAI System</span>
-                            <span class="message-time">Now</span>
+            <main class="content-area">
+                <div class="view active" id="chatView">
+                    <div class="chat-container">
+                        <div class="chat-messages" id="chatMessages">
+                            <div class="message message-agent">
+                                <div class="message-header">
+                                    <div class="message-avatar">AI</div>
+                                    <span class="message-sender">OraclAI System</span>
+                                    <span class="message-time">Now</span>
+                                </div>
+                                <div class="message-content">
+                                    Welcome to OraclAI Trading Terminal. I am your multi-agent AI trading assistant powered by 4 specialized agents:<br><br>
+                                    🤖 <b>Bullish Agent</b> - Buy opportunity analyzer<br>
+                                    🤖 <b>Bearish Agent</b> - Risk assessment specialist<br>
+                                    🤖 <b>Judge Agent</b> - Final decision arbiter<br>
+                                    🤖 <b>Data Agent</b> - Real-time market data<br><br>
+                                    Try asking: <i>What are the best stocks this week?</i> or <i>Analyze AAPL</i>
+                                </div>
+                            </div>
                         </div>
-                        <div class="message-content">
-                            Welcome to OraclAI Trading Terminal. I'm your multi-agent AI trading assistant powered by 4 specialized agents:
-                            <br><br>
-                            🤖 <b>Bullish Agent</b> - Buy opportunity analyzer<br>
-                            🤖 <b>Bearish Agent</b> - Risk assessment specialist<br>
-                            🤖 <b>Judge Agent</b> - Final decision arbiter<br>
-                            🤖 <b>Data Agent</b> - Real-time market data<br><br>
-                            Try asking: <i>"What are the best stocks this week?"</i> or <i>"Analyze AAPL"</i>
+                        <div class="input-area">
+                            <div class="input-container">
+                                <textarea class="input-box" id="userInput" placeholder="Enter your trading query..." rows="2"></textarea>
+                                <button class="btn-send" onclick="sendMessage()">➤</button>
+                            </div>
+                            <div class="quick-actions">
+                                <button class="quick-action" onclick="quickQuery('Top picks')">Top picks</button>
+                                <button class="quick-action" onclick="quickQuery('Analyze AAPL')">AAPL</button>
+                                <button class="quick-action" onclick="quickQuery('Market outlook')">Market</button>
+                                <button class="quick-action" onclick="quickQuery('NVDA analysis')">NVDA</button>
+                            </div>
                         </div>
                     </div>
                 </div>
-                
-                <div class="input-area">
-                    <div class="input-container">
-                        <textarea class="input-box" id="userInput" placeholder="Enter your trading query... (e.g., 'Analyze NVDA', 'Top picks this week')" rows="2"></textarea>
-                        <button class="btn-send" onclick="sendMessage()">➤</button>
+
+                <div class="view" id="portfolioView">
+                    <div class="locked-content" id="portfolioLocked">
+                        <div class="locked-icon">🔒</div>
+                        <div class="locked-text">Portfolio Access Restricted</div>
+                        <div class="locked-hint">Please login to view your portfolio</div>
                     </div>
-                    <div class="quick-actions">
-                        <button class="quick-action" onclick="quickQuery('Top picks this week')">Top picks</button>
-                        <button class="quick-action" onclick="quickQuery('Analyze AAPL')">AAPL</button>
-                        <button class="quick-action" onclick="quickQuery('Market outlook')">Market outlook</button>
-                        <button class="quick-action" onclick="quickQuery('Hidden gems')">Hidden gems</button>
-                        <button class="quick-action" onclick="quickQuery('Risk analysis')">Risk analysis</button>
+                    <div id="portfolioContent" style="display:none;">
+                        <h2 style="margin-bottom: 20px;">Your Portfolio</h2>
+                        <div class="portfolio-grid" id="portfolioGrid"></div>
                     </div>
+                </div>
+
+                <div class="view" id="marketView">
+                    <h2 style="margin-bottom: 20px;">Market Overview</h2>
+                    <div class="market-grid" id="marketGrid"></div>
+                </div>
+
+                <div class="view" id="historyView">
+                    <h2 style="margin-bottom: 20px;">Analysis History</h2>
+                    <div class="history-list" id="historyList"></div>
                 </div>
             </main>
             
@@ -494,327 +638,40 @@
                     <div class="section-title">System Status</div>
                     <div class="agent-status">
                         <div class="status-dot"></div>
-                        <span>All Agents Operational</span>
+                        <span id="systemStatus">Initializing...</span>
                     </div>
                 </div>
-                
                 <div class="panel-section">
                     <div class="section-title">API Access</div>
                     <div style="background: var(--bg-tertiary); border-radius: 8px; padding: 16px; margin-top: 12px;">
-                        <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">
-                            Generate an API key to use OraclAI in your own applications and websites.
-                        </p>
-                        <button class="btn-header" onclick="generateApiKey()" style="width: 100%; background: var(--accent-orange); color: white; border: none; padding: 10px;">
-                            🔑 Generate API Key
-                        </button>
+                        <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">Generate an API key for external use</p>
+                        <button class="btn-header" onclick="generateApiKey()" style="width: 100%; background: var(--accent-orange); color: white; border: none; padding: 10px;">🔑 Generate API Key</button>
                         <div id="apiKeyDisplay" style="display: none; margin-top: 12px; padding: 12px; background: var(--bg-primary); border-radius: 6px; border: 1px solid var(--border-color);">
                             <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">Your API Key:</div>
                             <code id="apiKeyValue" style="font-size: 11px; word-break: break-all; color: var(--accent-green);"></code>
-                            <div style="font-size: 10px; color: var(--text-secondary); margin-top: 8px;">
-                                Copy this key and use it in your API requests with header: <br>
-                                <code style="color: var(--accent-orange);">Authorization: Bearer YOUR_KEY</code>
-                            </div>
                         </div>
                     </div>
                 </div>
-                
                 <div class="panel-section">
                     <div class="section-title">Active Agents</div>
                     <div class="debate-visual">
                         <div class="agent-row">
                             <span style="width: 80px;">Bullish</span>
-                            <div class="confidence-bar">
-                                <div class="confidence-fill" style="width: 75%; background: var(--accent-green);"></div>
-                            </div>
-                            <span>75%</span>
+                            <div class="confidence-bar"><div class="confidence-fill" id="bullishBar" style="width: 0%; background: var(--accent-green);"></div></div>
+                            <span id="bullishPct">0%</span>
                         </div>
                         <div class="agent-row">
                             <span style="width: 80px;">Bearish</span>
-                            <div class="confidence-bar">
-                                <div class="confidence-fill" style="width: 45%; background: var(--accent-red);"></div>
-                            </div>
-                            <span>45%</span>
+                            <div class="confidence-bar"><div class="confidence-fill" id="bearishBar" style="width: 0%; background: var(--accent-red);"></div></div>
+                            <span id="bearishPct">0%</span>
                         </div>
                         <div class="agent-row">
                             <span style="width: 80px;">Judge</span>
-                            <div class="confidence-bar">
-                                <div class="confidence-fill" style="width: 82%; background: var(--accent-blue);"></div>
-                            </div>
-                            <span>82%</span>
+                            <div class="confidence-bar"><div class="confidence-fill" id="judgeBar" style="width: 0%; background: var(--accent-blue);"></div></div>
+                            <span id="judgePct">0%</span>
                         </div>
-                    </div>
-                </div>
-                
-                <div class="panel-section">
-                    <div class="section-title">Recent Activity</div>
-                    <div style="font-size: 12px; color: var(--text-secondary);">
-                        • AAPL analysis completed<br>
-                        • Market scan: 12 opportunities found<br>
-                        • NVDA debate concluded: BUY<br>
-                        • System updated: 5 min ago
                     </div>
                 </div>
             </aside>
         </div>
     </div>
-
-    <script>
-        const chatMessages = document.getElementById('chatMessages');
-        const userInput = document.getElementById('userInput');
-        
-        // Auto-resize textarea
-        userInput.addEventListener('input', function() {
-            this.style.height = 'auto';
-            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
-        });
-        
-        // Enter to send
-        userInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-            }
-        });
-        
-        function quickQuery(query) {
-            userInput.value = query;
-            sendMessage();
-        }
-        
-        function sendMessage() {
-            const message = userInput.value.trim();
-            if (!message) return;
-            
-            // Add user message
-            addMessage(message, 'user');
-            userInput.value = '';
-            userInput.style.height = 'auto';
-            
-            // Show loading
-            showLoading();
-            
-            // Process the query
-            processQuery(message);
-        }
-        
-        function addMessage(content, sender, isFallback = false) {
-            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message message-${sender}`;
-            
-            let avatar = sender === 'user' ? 'You' : 'AI';
-            let name = sender === 'user' ? 'You' : 'OraclAI';
-            
-            let fallbackHTML = isFallback ? `
-                <div class="fallback-notice">
-                    <span>⚡</span>
-                    <span>Fallback Mode: Response powered by external AI (Gemini) - Multi-agent system temporarily unavailable</span>
-                </div>
-            ` : '';
-            
-            messageDiv.innerHTML = `
-                <div class="message-header">
-                    <div class="message-avatar">${avatar}</div>
-                    <span class="message-sender">${name}</span>
-                    <span class="message-time">${time}</span>
-                </div>
-                <div class="message-content">${content}</div>
-                ${fallbackHTML}
-            `;
-            
-            chatMessages.appendChild(messageDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-        
-        function showLoading() {
-            const loadingDiv = document.createElement('div');
-            loadingDiv.className = 'loading';
-            loadingDiv.id = 'loadingIndicator';
-            loadingDiv.innerHTML = `
-                <div class="spinner"></div>
-                <span>Multi-agent analysis in progress...</span>
-            `;
-            chatMessages.appendChild(loadingDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-        
-        function hideLoading() {
-            const loading = document.getElementById('loadingIndicator');
-            if (loading) loading.remove();
-        }
-        
-        async function processQuery(query) {
-            try {
-                // First, classify the query
-                const classifyResponse = await fetch('/api/v1/classify', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ input: query })
-                });
-                
-                const classification = await classifyResponse.json();
-                
-                // Handle different query types
-                if (classification.type === 'single_stock') {
-                    await analyzeStock(classification.ticker);
-                } else if (classification.type === 'ranking') {
-                    await getRanking();
-                } else if (classification.type === 'market_analysis') {
-                    await getMarketAnalysis();
-                } else {
-                    // General query - use fallback if needed
-                    await handleGeneralQuery(query, classification.message);
-                }
-            } catch (error) {
-                hideLoading();
-                // Fallback to external LLM
-                await fallbackToLLM(query);
-            }
-        }
-        
-        async function analyzeStock(symbol) {
-            try {
-                const response = await fetch('/api/v1/debate/start', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ symbol: symbol })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    // Stream the debate results
-                    streamDebate(data.session_id, symbol);
-                } else {
-                    throw new Error('Failed to start debate');
-                }
-            } catch (error) {
-                hideLoading();
-                addMessage(`I'm analyzing ${symbol} using alternative methods...`, 'agent', true);
-                await fallbackToLLM(`Analyze ${symbol} stock`);
-            }
-        }
-        
-        function streamDebate(sessionId, symbol) {
-            const eventSource = new EventSource(`/api/v1/debate/stream/${sessionId}`);
-            let debateContent = '';
-            
-            eventSource.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                
-                if (data.type === 'complete') {
-                    hideLoading();
-                    const result = data.result;
-                    debateContent = `
-                        <b>🎯 Verdict: ${result.final_decision.decision}</b><br>
-                        <b>Confidence:</b> ${(result.final_decision.confidence * 100).toFixed(1)}%<br>
-                        <b>Position Size:</b> ${result.final_decision.position_size}%<br><br>
-                        <b>Agent Consensus:</b><br>
-                        • Bullish: ${result.agent_positions.find(a => a.role === 'bullish')?.stance || 'N/A'}<br>
-                        • Bearish: ${result.agent_positions.find(a => a.role === 'bearish')?.stance || 'N/A'}<br>
-                        • Judge: ${result.agent_positions.find(a => a.role === 'judge')?.stance || 'N/A'}<br><br>
-                        <b>Rationale:</b> ${result.final_decision.reasoning}
-                    `;
-                    addMessage(debateContent, 'agent');
-                    eventSource.close();
-                }
-            };
-            
-            eventSource.onerror = () => {
-                hideLoading();
-                eventSource.close();
-                fallbackToLLM(`Complete analysis for ${symbol}`);
-            };
-        }
-        
-        async function getRanking() {
-            // Simulate ranking response
-            setTimeout(() => {
-                hideLoading();
-                addMessage(`
-                    <b>🏆 Top Stock Picks This Week</b><br><br>
-                    Based on multi-agent consensus analysis:<br><br>
-                    <b>1. NVDA</b> - Strong AI momentum, 95% confidence BUY<br>
-                    <b>2. MSFT</b> - Cloud growth stable, 88% confidence BUY<br>
-                    <b>3. AVGO</b> - Dividend + growth, 82% confidence BUY<br>
-                    <b>4. META</b> - Ad revenue recovering, 78% confidence HOLD→BUY<br>
-                    <b>5. UNH</b> - Healthcare defensive, 75% confidence BUY<br><br>
-                    <i>Analysis completed by 4 agents with full debate consensus.</i>
-                `, 'agent');
-            }, 2000);
-        }
-        
-        async function getMarketAnalysis() {
-            setTimeout(() => {
-                hideLoading();
-                addMessage(`
-                    <b>📊 Market Outlook</b><br><br>
-                    <b>Current Phase:</b> Bullish Continuation<br>
-                    <b>VIX Level:</b> 14.23 (Low volatility)<br>
-                    <b>Systemic Risk:</b> 0.28 (Low)<br><br>
-                    <b>Multi-Agent Assessment:</b><br>
-                    • Bullish Agent: Risk-on environment favorable<br>
-                    • Bearish Agent: Limited downside protection needed<br>
-                    • Judge: Maintain current allocations<br><br>
-                    <b>Recommendation:</b> Gradually increase equity exposure. Tech and AI sectors showing strongest momentum.
-                `, 'agent');
-            }, 1500);
-        }
-        
-        async function handleGeneralQuery(query, suggestion) {
-            hideLoading();
-            addMessage(suggestion || `I understand you're asking about "${query}". Let me analyze this for you...`, 'agent');
-        }
-        
-        async function fallbackToLLM(query) {
-            // Simulate fallback to Gemini/ChatGPT
-            setTimeout(() => {
-                const responses = {
-                    'AAPL': `<b>⚡ Fallback Analysis: AAPL</b><br><br>Apple Inc. (AAPL) Current Assessment:<br><br><b>Positives:</b> Strong services revenue, Vision Pro launch, cash reserves<br><b>Concerns:</b> iPhone sales slowing in China, regulatory pressure<br><b>Technical:</b> Trading above 200-day MA<br><b>Verdict:</b> HOLD / Weak BUY - Wait for pullback to $185-190 range for better entry`,
-                    'NVDA': `<b>⚡ Fallback Analysis: NVDA</b><br><br>NVIDIA Corporation (NVDA) Current Assessment:<br><br><b>Positives:</b> AI chip dominance, data center growth, H100 demand<br><b>Concerns:</b> High valuation, China export restrictions<br><b>Technical:</b> Strong momentum, parabolic move<br><b>Verdict:</b> BUY - Leader in AI revolution, but size position carefully given valuation`,
-                    'default': `<b>⚡ Analysis Complete</b><br><br>Based on current market conditions and available data, I've analyzed your query about "${query}".<br><br>While my multi-agent system is currently processing other requests, I've used my backup analysis capability to provide this assessment.<br><br><i>Note: For more detailed multi-agent debate analysis with confidence scores from all 4 agents, please try again in a moment.</i>`
-                };
-                
-                const response = responses[query.split(' ')[1]] || responses['default'];
-                addMessage(response, 'agent', true);
-            }, 1000);
-        }
-        
-        function toggleTheme() {
-            // Theme toggle placeholder
-            console.log('Theme toggle');
-        }
-        
-        async function generateApiKey() {
-            try {
-                const response = await fetch('/api/web/generate-key', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    document.getElementById('apiKeyValue').textContent = data.api_key;
-                    document.getElementById('apiKeyDisplay').style.display = 'block';
-                    
-                    // Also show in chat
-                    addMessage(`
-                        <b>🔑 API Key Generated Successfully</b><br><br>
-                        Your new API key: <code style="background: var(--bg-tertiary); padding: 4px 8px; border-radius: 4px; color: var(--accent-green);">${data.api_key}</code><br><br>
-                        <b>Usage:</b><br>
-                        Add this header to your API requests:<br>
-                        <code style="background: var(--bg-tertiary); padding: 4px 8px; border-radius: 4px;">Authorization: Bearer ${data.api_key}</code><br><br>
-                        <b>Rate Limits:</b> 60 requests/minute<br>
-                        <b>Endpoints:</b> /api/v1/*
-                    `, 'agent');
-                } else {
-                    addMessage(`<b>Error:</b> ${data.error || 'Failed to generate API key'}`, 'agent');
-                }
-            } catch (error) {
-                addMessage(`<b>Error:</b> Could not generate API key. Please try again.`, 'agent');
-            }
-        }
-    </script>
-</body>
-</html>
