@@ -53,6 +53,116 @@ app.secret_key = os.environ.get('SECRET_KEY', 'oraclai-secret-key-change-in-prod
 web_sessions = {}
 admin_sessions = {}
 
+# Live user tracking system
+class LiveTracker:
+    def __init__(self):
+        self.active_users = {}  # session_id -> {user_id, username, last_seen, ip}
+        self.active_debates = {}  # session_id -> {symbol, start_time, agents}
+        self.request_times = []  # List of recent request timestamps
+        self.lock = threading.Lock()
+    
+    def track_user(self, session_id, user_data):
+        """Track an active user session"""
+        with self.lock:
+            self.active_users[session_id] = {
+                'user_id': user_data.get('user_id'),
+                'username': user_data.get('username', 'Anonymous'),
+                'is_admin': user_data.get('is_admin', False),
+                'last_seen': time.time(),
+                'ip': user_data.get('ip'),
+                'user_agent': user_data.get('user_agent'),
+                'joined_at': time.time()
+            }
+    
+    def update_user_activity(self, session_id):
+        """Update last seen timestamp for a user"""
+        with self.lock:
+            if session_id in self.active_users:
+                self.active_users[session_id]['last_seen'] = time.time()
+    
+    def remove_user(self, session_id):
+        """Remove a user session"""
+        with self.lock:
+            if session_id in self.active_users:
+                del self.active_users[session_id]
+    
+    def track_debate(self, session_id, symbol):
+        """Track an active debate"""
+        with self.lock:
+            self.active_debates[session_id] = {
+                'symbol': symbol,
+                'start_time': time.time(),
+                'status': 'active'
+            }
+    
+    def complete_debate(self, session_id):
+        """Mark a debate as complete"""
+        with self.lock:
+            if session_id in self.active_debates:
+                self.active_debates[session_id]['status'] = 'complete'
+                self.active_debates[session_id]['end_time'] = time.time()
+    
+    def track_request(self):
+        """Track a request for response time calculation"""
+        with self.lock:
+            now = time.time()
+            self.request_times.append(now)
+            # Keep only last 100 requests
+            self.request_times = self.request_times[-100:]
+    
+    def get_stats(self):
+        """Get current platform stats"""
+        with self.lock:
+            now = time.time()
+            # Count users active in last 5 minutes
+            active_users_count = sum(
+                1 for u in self.active_users.values()
+                if now - u['last_seen'] < 300  # 5 minutes
+            )
+            
+            # Count active debates
+            active_debates_count = sum(
+                1 for d in self.active_debates.values()
+                if d['status'] == 'active'
+            )
+            
+            # Calculate average response time
+            avg_response = 0
+            if len(self.request_times) >= 2:
+                # Calculate average time between requests as proxy
+                times = self.request_times[-10:]
+                if len(times) >= 2:
+                    avg_response = sum(times[i] - times[i-1] for i in range(1, len(times))) / (len(times) - 1)
+                    avg_response = round(avg_response * 1000, 0)  # Convert to ms
+            
+            return {
+                'active_users': active_users_count,
+                'total_users': len(self.active_users),
+                'active_debates': active_debates_count,
+                'total_debates': len(self.active_debates),
+                'system_status': 'operational',
+                'avg_response_ms': avg_response if avg_response > 0 else '--',
+                'timestamp': now
+            }
+    
+    def get_active_users_list(self):
+        """Get list of active users"""
+        with self.lock:
+            now = time.time()
+            return [
+                {
+                    'username': u['username'],
+                    'is_admin': u['is_admin'],
+                    'session_duration': int(now - u['joined_at']),
+                    'last_activity': int(now - u['last_seen'])
+                }
+                for u in self.active_users.values()
+                if now - u['last_seen'] < 300
+            ]
+
+# Initialize live tracker
+live_tracker = LiveTracker()
+
 # Configure CORS for external frontend access
 CORS(app, resources={
     r"/api/*": {
@@ -333,6 +443,175 @@ def get_session():
             }
         })
     return jsonify({"success": False, "error": "Not logged in"}), 401
+
+@app.before_request
+def track_request_middleware():
+    """Track all requests for live monitoring"""
+    live_tracker.track_request()
+    # Update user activity if they have a session
+    if session.get('user_id'):
+        live_tracker.update_user_activity(session.get('session_id') or session.get('user_id'))
+
+# Live stats SSE endpoint for admin dashboard
+@app.route('/api/admin/live-stats')
+def admin_live_stats():
+    """Server-Sent Events for live platform statistics"""
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    def generate_stats():
+        while True:
+            stats = live_tracker.get_stats()
+            data = json.dumps({
+                'type': 'stats',
+                'data': stats
+            })
+            yield f"data: {data}\n\n"
+            time.sleep(2)  # Update every 2 seconds
+    
+    return Response(
+        stream_with_context(generate_stats()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no',
+            'Access-Control-Allow-Origin': '*'
+        }
+    )
+
+@app.route('/api/admin/stats')
+def admin_stats():
+    """Get current platform stats (REST API)"""
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    return jsonify({
+        "success": True,
+        "stats": live_tracker.get_stats(),
+        "active_users": live_tracker.get_active_users_list()
+    })
+
+# File Editor API Endpoints
+@app.route('/api/admin/files')
+def list_files():
+    """List files in the project directory"""
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    path = request.args.get('path', '.')
+    try:
+        entries = []
+        for entry in os.scandir(path):
+            entries.append({
+                'name': entry.name,
+                'path': entry.path,
+                'is_file': entry.is_file(),
+                'is_dir': entry.is_dir(),
+                'size': entry.stat().st_size if entry.is_file() else 0,
+                'modified': entry.stat().st_mtime
+            })
+        return jsonify({"success": True, "files": sorted(entries, key=lambda x: (not x['is_dir'], x['name']))})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/admin/files/read')
+def read_file_admin():
+    """Read file contents"""
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    filepath = request.args.get('path')
+    if not filepath:
+        return jsonify({"error": "Path required"}), 400
+    
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return jsonify({
+            "success": True,
+            "content": content,
+            "path": filepath,
+            "size": len(content)
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/admin/files/write', methods=['POST'])
+def write_file_admin():
+    """Write file contents"""
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    data = request.get_json() or {}
+    filepath = data.get('path')
+    content = data.get('content')
+    
+    if not filepath or content is None:
+        return jsonify({"error": "Path and content required"}), 400
+    
+    try:
+        # Create backup before writing
+        if os.path.exists(filepath):
+            backup_path = filepath + '.backup.' + str(int(time.time()))
+            with open(filepath, 'r', encoding='utf-8') as f:
+                old_content = f.read()
+            with open(backup_path, 'w', encoding='utf-8') as f:
+                f.write(old_content)
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        return jsonify({
+            "success": True,
+            "message": "File saved successfully",
+            "path": filepath,
+            "size": len(content)
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/admin/windsurf/apply', methods=['POST'])
+def windsurf_apply_changes():
+    """Apply changes via Windsurf API"""
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    data = request.get_json() or {}
+    changes = data.get('changes', [])
+    
+    results = []
+    for change in changes:
+        filepath = change.get('path')
+        operation = change.get('operation', 'edit')  # edit, create, delete
+        content = change.get('content', '')
+        
+        try:
+            if operation == 'create':
+                os.makedirs(os.path.dirname(filepath), exist_ok=True)
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                results.append({'path': filepath, 'status': 'created'})
+            
+            elif operation == 'edit':
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                results.append({'path': filepath, 'status': 'edited'})
+            
+            elif operation == 'delete':
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+                    results.append({'path': filepath, 'status': 'deleted'})
+                else:
+                    results.append({'path': filepath, 'status': 'not_found'})
+        
+        except Exception as e:
+            results.append({'path': filepath, 'status': 'error', 'error': str(e)})
+    
+    return jsonify({
+        "success": True,
+        "results": results,
+        "applied_count": len([r for r in results if r['status'] in ('created', 'edited', 'deleted')])
+    })
 
 HTML_ADMIN_LOGIN = '''<!DOCTYPE html>
 <html lang="en">

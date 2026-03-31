@@ -573,11 +573,11 @@
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-header">
-                            <span class="stat-label">Active Users</span>
+                            <span class="stat-label">Active Users (Live)</span>
                             <div class="stat-icon green">👥</div>
                         </div>
                         <div class="stat-value" id="activeUsers">--</div>
-                        <div class="stat-change">Real-time tracking not yet implemented</div>
+                        <div class="stat-change" id="activeUsersDetail">Connecting...</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-header">
@@ -585,15 +585,15 @@
                             <div class="stat-icon blue">🤖</div>
                         </div>
                         <div class="stat-value" id="activeDebates">--</div>
-                        <div class="stat-change">Session-based counter</div>
+                        <div class="stat-change" id="activeDebatesDetail">Real-time</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-header">
                             <span class="stat-label">System Status</span>
                             <div class="stat-icon orange">⚡</div>
                         </div>
-                        <div class="stat-value" id="systemLoad">OK</div>
-                        <div class="stat-change">Operational</div>
+                        <div class="stat-value" id="systemLoad">--</div>
+                        <div class="stat-change" id="systemStatusText">Checking...</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-header">
@@ -601,11 +601,11 @@
                             <div class="stat-icon purple">⏱️</div>
                         </div>
                         <div class="stat-value" id="avgResponse">--</div>
-                        <div class="stat-change">Based on last 10 requests</div>
+                        <div class="stat-change">ms per request</div>
                     </div>
                 </div>
                 
-                <div class="panels-grid">
+                <div class="panels-grid" style="grid-template-columns: 1fr 1fr 1fr;">
                     <div class="panel">
                         <div class="panel-header">
                             <h3 class="panel-title">🤖 Agent Status</h3>
@@ -660,41 +660,32 @@
                     
                     <div class="panel">
                         <div class="panel-header">
-                            <h3 class="panel-title">⚡ LLM Fallback Settings</h3>
+                            <h3 class="panel-title">👥 Active Users</h3>
                             <div class="panel-actions">
-                                <button class="btn-sm">Test Connection</button>
+                                <button class="btn-sm btn-primary" onclick="refreshUsers()">Refresh</button>
                             </div>
                         </div>
-                        
-                        <div class="toggle-container">
-                            <div class="toggle active" onclick="this.classList.toggle('active')">
-                                <div class="toggle-handle"></div>
+                        <div id="activeUsersList" style="max-height: 300px; overflow-y: auto;">
+                            <div style="color: var(--text-secondary); text-align: center; padding: 20px;">Loading...</div>
+                        </div>
+                    </div>
+                    
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3 class="panel-title">🛠️ Windsurf Editor</h3>
+                            <div class="panel-actions">
+                                <button class="btn-sm btn-primary" onclick="openFileEditor()">Open Editor</button>
                             </div>
-                            <span class="toggle-label">Enable Automatic Fallback to Gemini</span>
                         </div>
-                        
-                        <div class="toggle-container">
-                            <div class="toggle active" onclick="this.classList.toggle('active')">
-                                <div class="toggle-handle"></div>
+                        <div style="padding: 16px;">
+                            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 12px;">
+                                Edit website files directly from the admin panel. Changes are saved immediately.
+                            </p>
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                <button class="btn-sm" onclick="openFileEditor('templates/terminal.html')">terminal.html</button>
+                                <button class="btn-sm" onclick="openFileEditor('templates/admin.html')">admin.html</button>
+                                <button class="btn-sm" onclick="openFileEditor('production_server.py')">server.py</button>
                             </div>
-                            <span class="toggle-label">Notify Users When Fallback Active</span>
-                        </div>
-                        
-                        <div class="toggle-container">
-                            <div class="toggle" onclick="this.classList.toggle('active')">
-                                <div class="toggle-handle"></div>
-                            </div>
-                            <span class="toggle-label">Log All Fallback Requests</span>
-                        </div>
-                        
-                        <div class="form-group" style="margin-top: 24px;">
-                            <label class="form-label">Fallback Trigger Threshold</label>
-                            <input type="text" class="form-input" value="System unresponsive for >30 seconds">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Primary Fallback Model</label>
-                            <input type="text" class="form-input" value="Google Gemini Pro">
                         </div>
                     </div>
                 </div>
@@ -755,6 +746,29 @@
         </div>
     </div>
     
+    <!-- File Editor Modal -->
+    <div class="modal-overlay" id="fileEditorModal" style="display: none;">
+        <div class="modal" style="width: 90%; max-width: 1200px; height: 90vh; display: flex; flex-direction: column;">
+            <div class="panel-header" style="margin-bottom: 16px;">
+                <h3 class="panel-title">📝 File Editor - <span id="editorFilename">Select a file</span></h3>
+                <div class="panel-actions">
+                    <button class="btn-sm btn-primary" onclick="saveFile()">💾 Save Changes</button>
+                    <button class="btn-sm" onclick="closeFileEditor()">✕ Close</button>
+                </div>
+            </div>
+            <div style="display: flex; flex: 1; gap: 16px; overflow: hidden;">
+                <div style="width: 250px; background: var(--bg-tertiary); border-radius: 8px; padding: 12px; overflow-y: auto;">
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase;">Files</div>
+                    <div id="fileTree"></div>
+                </div>
+                <div style="flex: 1; display: flex; flex-direction: column;">
+                    <textarea id="fileEditor" style="flex: 1; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; color: var(--text-primary); font-family: monospace; font-size: 13px; resize: none; white-space: pre; overflow-wrap: normal; overflow-x: auto;" spellcheck="false"></textarea>
+                    <div style="margin-top: 8px; font-size: 12px; color: var(--text-secondary);" id="editorStatus">Ready</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal for confirmations -->
     <div class="modal-overlay" id="modal">
         <div class="modal">
@@ -768,6 +782,182 @@
     </div>
     
     <script>
+        // Live tracking with SSE
+        let statsEventSource = null;
+        let currentFilePath = null;
+        
+        function connectLiveStats() {
+            if (statsEventSource) {
+                statsEventSource.close();
+            }
+            
+            statsEventSource = new EventSource('/api/admin/live-stats');
+            
+            statsEventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'stats') {
+                        updateStatsDisplay(data.data);
+                    }
+                } catch (e) {
+                    console.error('Failed to parse stats:', e);
+                }
+            };
+            
+            statsEventSource.onerror = () => {
+                console.log('Live stats connection lost, retrying...');
+                document.getElementById('activeUsersDetail').textContent = 'Connection lost';
+                setTimeout(connectLiveStats, 5000);
+            };
+        }
+        
+        function updateStatsDisplay(stats) {
+            document.getElementById('activeUsers').textContent = stats.active_users;
+            document.getElementById('activeUsersDetail').textContent = `${stats.total_users} total users`;
+            document.getElementById('activeDebates').textContent = stats.active_debates;
+            document.getElementById('activeDebatesDetail').textContent = `${stats.total_debates} total debates`;
+            document.getElementById('systemLoad').textContent = stats.system_status === 'operational' ? 'OK' : 'Warning';
+            document.getElementById('systemStatusText').textContent = 'All systems go';
+            document.getElementById('avgResponse').textContent = stats.avg_response_ms === '--' ? '--' : stats.avg_response_ms + 'ms';
+        }
+        
+        async function refreshUsers() {
+            try {
+                const response = await fetch('/api/admin/stats');
+                const data = await response.json();
+                if (data.success) {
+                    updateUsersList(data.active_users);
+                }
+            } catch (e) {
+                console.error('Failed to fetch users:', e);
+            }
+        }
+        
+        function updateUsersList(users) {
+            const container = document.getElementById('activeUsersList');
+            if (!users || users.length === 0) {
+                container.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 20px;">No active users</div>';
+                return;
+            }
+            
+            container.innerHTML = users.map(u => `
+                <div style="display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid var(--border-color); font-size: 13px;">
+                    <span>${u.is_admin ? '👑' : '👤'} ${u.username}</span>
+                    <span style="color: var(--text-secondary);">${u.session_duration}s</span>
+                </div>
+            `).join('');
+        }
+        
+        // File Editor Functions
+        async function openFileEditor(filepath = null) {
+            document.getElementById('fileEditorModal').style.display = 'flex';
+            if (filepath) {
+                await loadFile(filepath);
+            }
+            await loadFileTree();
+        }
+        
+        function closeFileEditor() {
+            document.getElementById('fileEditorModal').style.display = 'none';
+            currentFilePath = null;
+        }
+        
+        async function loadFileTree() {
+            try {
+                const response = await fetch('/api/admin/files?path=.');
+                const data = await response.json();
+                if (data.success) {
+                    renderFileTree(data.files);
+                }
+            } catch (e) {
+                console.error('Failed to load files:', e);
+            }
+        }
+        
+        function renderFileTree(files) {
+            const container = document.getElementById('fileTree');
+            container.innerHTML = files.map(f => `
+                <div onclick="loadFile('${f.path}')" style="cursor: pointer; padding: 6px 8px; border-radius: 4px; font-size: 12px; 
+                    ${f.is_dir ? 'font-weight: 600;' : ''} 
+                    ${currentFilePath === f.path ? 'background: var(--accent-orange); color: white;' : 'hover: background: var(--bg-secondary);'}">
+                    ${f.is_dir ? '📁' : '📄'} ${f.name}
+                </div>
+            `).join('');
+        }
+        
+        async function loadFile(filepath) {
+            currentFilePath = filepath;
+            document.getElementById('editorFilename').textContent = filepath;
+            document.getElementById('editorStatus').textContent = 'Loading...';
+            
+            try {
+                const response = await fetch(`/api/admin/files/read?path=${encodeURIComponent(filepath)}`);
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('fileEditor').value = data.content;
+                    document.getElementById('editorStatus').textContent = `Loaded ${data.size} bytes`;
+                } else {
+                    document.getElementById('editorStatus').textContent = 'Error: ' + data.error;
+                }
+            } catch (e) {
+                document.getElementById('editorStatus').textContent = 'Failed to load file';
+            }
+            
+            // Refresh tree to show selection
+            await loadFileTree();
+        }
+        
+        async function saveFile() {
+            if (!currentFilePath) {
+                alert('No file selected');
+                return;
+            }
+            
+            const content = document.getElementById('fileEditor').value;
+            document.getElementById('editorStatus').textContent = 'Saving...';
+            
+            try {
+                const response = await fetch('/api/admin/files/write', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: currentFilePath, content: content })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('editorStatus').textContent = `Saved ${data.size} bytes ✓`;
+                    // Trigger Windsurf to apply changes
+                    await applyWindsurfChanges();
+                } else {
+                    document.getElementById('editorStatus').textContent = 'Error: ' + data.error;
+                }
+            } catch (e) {
+                document.getElementById('editorStatus').textContent = 'Failed to save';
+            }
+        }
+        
+        async function applyWindsurfChanges() {
+            try {
+                const response = await fetch('/api/admin/windsurf/apply', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        changes: [{ path: currentFilePath, operation: 'edit', content: document.getElementById('fileEditor').value }]
+                    })
+                });
+                const data = await response.json();
+                console.log('Windsurf apply:', data);
+            } catch (e) {
+                console.error('Windsurf apply failed:', e);
+            }
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            connectLiveStats();
+            refreshUsers();
+            setInterval(refreshUsers, 10000); // Refresh users every 10s
+        });
+        
         // Navigation
         document.querySelectorAll('.nav-item').forEach(item => {
             item.addEventListener('click', function() {
@@ -784,11 +974,6 @@
         function closeModal() {
             document.getElementById('modal').classList.remove('active');
         }
-        
-        // Auto-refresh stats every 30 seconds
-        setInterval(() => {
-            console.log('Refreshing stats...');
-        }, 30000);
     </script>
 </body>
 </html>
