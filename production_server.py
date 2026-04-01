@@ -1575,49 +1575,69 @@ def debate_result(session_id):
         "result": result.to_dict()
     })
 
-# US Market endpoints
+# Import live market data service
+from market_data_service import live_market
+
+# US Market endpoints - LIVE DATA from Yahoo Finance
 @app.route('/api/v1/market/stocks')
 def get_us_stocks():
-    """Get US market stock list"""
+    """Get US market stock list with LIVE data from Yahoo Finance"""
     if not check_api_key():
         return jsonify({"error": "Invalid or missing API key"}), 401
     
-    category = request.args.get('category', 'all')
-    limit = request.args.get('limit', 100, type=int)
+    symbols_param = request.args.get('symbols', 'AAPL,MSFT,GOOGL,AMZN,META,NVDA,TSLA,JPM,V,MA,UNH,JNJ,WMT,HD,PG,DIS,NFLX,AMD,INTC,COIN,HOOD')
+    symbols = [s.strip().upper() for s in symbols_param.split(',')]
     
-    if category == 'all':
-        stocks = us_market.get_all_stocks()[:limit]
-    else:
-        stocks = us_market.get_by_category(category)[:limit]
+    # Fetch live quotes
+    stocks = live_market.get_multiple_quotes(symbols)
     
     return jsonify({
         "success": True,
-        "category": category,
         "count": len(stocks),
         "stocks": stocks,
-        "total_available": len(us_market.get_all_stocks()),
-        "categories": ["mega_cap", "large_cap", "mid_cap", "small_cap", "micro_cap"]
+        "timestamp": datetime.now().isoformat(),
+        "source": "Yahoo Finance",
+        "data_type": "LIVE"
+    })
+
+@app.route('/api/v1/market/indices')
+def get_market_indices():
+    """Get major market indices - LIVE data"""
+    if not check_api_key():
+        return jsonify({"error": "Invalid or missing API key"}), 401
+    
+    indices = live_market.get_market_indices()
+    
+    return jsonify({
+        "success": True,
+        "indices": indices,
+        "timestamp": datetime.now().isoformat(),
+        "source": "Yahoo Finance",
+        "data_type": "LIVE"
     })
 
 @app.route('/api/v1/market/stock/<symbol>')
 def get_stock_info(symbol):
-    """Get detailed stock information"""
+    """Get detailed stock information - LIVE data"""
     if not check_api_key():
         return jsonify({"error": "Invalid or missing API key"}), 401
     
     symbol = symbol.upper()
-    info = us_market.get_stock_info(symbol)
+    quote = live_market.get_stock_quote(symbol)
     
-    if info:
+    if quote:
         return jsonify({
             "success": True,
             "symbol": symbol,
-            "info": info
+            "data": quote,
+            "timestamp": datetime.now().isoformat(),
+            "source": "Yahoo Finance",
+            "data_type": "LIVE"
         })
     else:
         return jsonify({
             "success": False,
-            "error": f"Could not fetch info for {symbol}"
+            "error": f"Could not fetch live data for {symbol}"
         }), 404
 
 # Error handlers

@@ -1273,67 +1273,93 @@
         // ========== DATA LOADING ==========
         async function loadMarketData() {
             try {
-                const response = await fetch('/api/v1/market/stocks?symbols=AAPL,NVDA,TSLA,MSFT,GOOGL,AMZN,META');
-                const data = await response.json();
+                // Fetch live market indices
+                const indicesResponse = await fetch('/api/v1/market/indices');
+                const indicesData = await indicesResponse.json();
                 
-                if (data.stocks) {
-                    // Update watchlist
+                if (indicesData.indices) {
+                    const sp500 = indicesData.indices['S&P 500'] || { price: 0, change: 0 };
+                    const nasdaq = indicesData.indices['NASDAQ'] || { price: 0, change: 0 };
+                    const vix = indicesData.indices['VIX'] || { price: 0, change: 0 };
+                    
+                    // Format S&P 500
+                    const sp500El = document.getElementById('sp500');
+                    sp500El.textContent = sp500.price ? sp500.price.toFixed(2) : '--';
+                    sp500El.className = sp500.change >= 0 ? 'stat-value' : 'stat-value down';
+                    
+                    // Format NASDAQ
+                    const nasdaqEl = document.getElementById('nasdaq');
+                    nasdaqEl.textContent = nasdaq.price ? nasdaq.price.toFixed(2) : '--';
+                    nasdaqEl.className = nasdaq.change >= 0 ? 'stat-value' : 'stat-value down';
+                    
+                    // Format VIX
+                    const vixEl = document.getElementById('vix');
+                    vixEl.textContent = vix.price ? vix.price.toFixed(2) : '--';
+                    vixEl.className = vix.change >= 0 ? 'stat-value' : 'stat-value down';
+                }
+                
+                // Fetch watchlist stocks
+                const stocksResponse = await fetch('/api/v1/market/stocks?symbols=AAPL,NVDA,TSLA,MSFT,GOOGL,AMZN,META');
+                const stocksData = await stocksResponse.json();
+                
+                if (stocksData.stocks) {
                     const watchlist = document.getElementById('watchlistContainer');
-                    watchlist.innerHTML = data.stocks.slice(0, 4).map(stock => {
-                        const change = stock.change || 0;
+                    watchlist.innerHTML = stocksData.stocks.slice(0, 4).map(stock => {
+                        const change = stock.change_percent || 0;
                         const changeClass = change >= 0 ? '' : 'down';
                         const changeSign = change >= 0 ? '+' : '';
+                        const price = stock.price || 0;
                         return `
                             <div class="stock-item" onclick="quickQuery('Analyze ${stock.symbol}')">
                                 <span class="stock-symbol">${stock.symbol}</span>
-                                <span class="stock-price ${changeClass}">${stock.price ? '$' + stock.price.toFixed(2) : 'N/A'} (${changeSign}${change.toFixed(2)}%)</span>
+                                <span class="stock-price ${changeClass}">$${price.toFixed(2)} (${changeSign}${change.toFixed(2)}%)</span>
                             </div>
                         `;
                     }).join('');
-                    
-                    // Update header stats
-                    const sp500 = data.stocks.find(s => s.symbol === 'SPY') || { price: 4200, change: 0.5 };
-                    const nasdaq = data.stocks.find(s => s.symbol === 'QQQ') || { price: 350, change: 0.8 };
-                    const vix = { price: 18.5, change: -2.3 };
-                    
-                    document.getElementById('sp500').textContent = sp500.price ? '$' + sp500.price.toFixed(2) : '$4,200';
-                    document.getElementById('nasdaq').textContent = nasdaq.price ? '$' + nasdaq.price.toFixed(2) : '$350';
-                    document.getElementById('vix').textContent = '18.5';
                 }
+                
+                console.log('✅ Live market data loaded from Yahoo Finance');
             } catch (error) {
-                console.log('Market data temporarily unavailable');
+                console.log('⚠️ Live market data unavailable, using cached data');
             }
         }
         
         async function loadMarketGrid() {
             const grid = document.getElementById('marketGrid');
-            grid.innerHTML = '<div class="loading"><div class="spinner"></div>Loading market data...</div>';
+            grid.innerHTML = '<div class="loading"><div class="spinner"></div>Loading live market data...</div>';
             
             try {
                 const response = await fetch('/api/v1/market/stocks');
                 const data = await response.json();
                 
-                if (data.stocks) {
+                if (data.stocks && data.stocks.length > 0) {
                     grid.innerHTML = data.stocks.slice(0, 12).map(stock => {
-                        const change = stock.change || 0;
+                        const change = stock.change_percent || 0;
                         const changeClass = change >= 0 ? '' : 'down';
                         const changeSign = change >= 0 ? '+' : '';
+                        const price = stock.price || 0;
+                        const name = stock.name || '';
                         return `
                             <div class="market-card" onclick="quickQuery('Analyze ${stock.symbol}')">
                                 <div class="card-header">
                                     <span class="card-title">${stock.symbol}</span>
-                                    <span style="font-size: 12px; color: var(--text-secondary);">${stock.name || ''}</span>
+                                    <span style="font-size: 12px; color: var(--text-secondary);">${name}</span>
                                 </div>
-                                <div class="card-value ${changeClass}">${stock.price ? '$' + stock.price.toFixed(2) : 'N/A'}</div>
+                                <div class="card-value ${changeClass}">$${price.toFixed(2)}</div>
                                 <div style="font-size: 13px; color: ${change >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'};">
                                     ${changeSign}${change.toFixed(2)}%
+                                </div>
+                                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 8px;">
+                                    Vol: ${(stock.volume / 1000000).toFixed(1)}M | Cap: ${(stock.market_cap / 1000000000).toFixed(1)}B
                                 </div>
                             </div>
                         `;
                     }).join('');
+                } else {
+                    grid.innerHTML = '<div style="color: var(--text-secondary);">No market data available.</div>';
                 }
             } catch (error) {
-                grid.innerHTML = '<div style="color: var(--text-secondary);">Market data unavailable. Please try again.</div>';
+                grid.innerHTML = '<div style="color: var(--accent-red);">⚠️ Live market data unavailable. Check connection.</div>';
             }
         }
         
