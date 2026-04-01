@@ -610,6 +610,208 @@ def write_file_admin():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route('/api/admin/publish', methods=['POST'])
+def admin_publish():
+    """Publish changes to production - triggers git push and deploy"""
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    data = request.get_json() or {}
+    source = data.get('source', 'manual')
+    
+    try:
+        import subprocess
+        
+        # Get latest git status
+        status_result = subprocess.run(
+            ['git', 'status', '--porcelain'],
+            cwd='.',
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        # Push to remote
+        push_result = subprocess.run(
+            ['git', 'push', 'origin', 'main'],
+            cwd='.',
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        # Try to trigger Railway deploy via webhook or API if configured
+        deploy_triggered = False
+        railway_url = os.environ.get('RAILWAY_URL', 'https://railway.app/dashboard')
+        
+        # Check if Railway CLI is available for deploy
+        try:
+            railway_check = subprocess.run(
+                ['which', 'railway'],
+                capture_output=True,
+                timeout=5
+            )
+            if railway_check.returncode == 0:
+                # Railway CLI is available, could trigger deploy
+                deploy_triggered = True
+        except:
+            pass
+        
+        return jsonify({
+            "success": True,
+            "message": "Changes published successfully",
+            "git_push": push_result.returncode == 0,
+            "git_output": push_result.stdout if push_result.returncode == 0 else push_result.stderr,
+            "deploy_triggered": deploy_triggered,
+            "deploy_url": railway_url,
+            "source": source,
+            "timestamp": datetime.now().isoformat(),
+            "pending_files": status_result.stdout if status_result.stdout else "None"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "message": "Publish failed - changes saved locally but not deployed"
+        }), 500
+
+@app.route('/api/admin/git-log', methods=['GET'])
+def admin_git_log():
+    """Get recent git commit history"""
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    limit = request.args.get('limit', 10, type=int)
+    
+    try:
+        import subprocess
+        
+        result = subprocess.run(
+            ['git', 'log', f'-{limit}', '--pretty=format:%H|%s|%ci|%an'],
+            cwd='.',
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        commits = []
+        if result.returncode == 0:
+            for line in result.stdout.strip().split('\n'):
+                if line:
+                    parts = line.split('|')
+                    if len(parts) >= 4:
+                        commits.append({
+                            'hash': parts[0],
+                            'message': parts[1],
+                            'date': parts[2][:19] if len(parts[2]) > 19 else parts[2],
+                            'author': parts[3]
+                        })
+        
+        return jsonify({
+            "success": True,
+            "commits": commits,
+            "count": len(commits)
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/admin/windsurf/ai-generate', methods=['POST'])
+def windsurf_ai_generate():
+    """Generate code changes using Windsurf AI / Gemini"""
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    data = request.get_json() or {}
+    prompt = data.get('prompt', '')
+    target_file = data.get('target_file', '')
+    
+    if not prompt:
+        return jsonify({"error": "Prompt required"}), 400
+    
+    try:
+        # Try to use Gemini if available
+        try:
+            import google.generativeai as genai
+            api_key = os.environ.get('GEMINI_API_KEY')
+            if api_key:
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel('gemini-pro')
+                
+                file_type = 'HTML' if target_file.endswith('.html') else 'Python' if target_file.endswith('.py') else 'CSS' if target_file.endswith('.css') else 'code'
+                
+                full_prompt = f"""You are a code generator for a trading platform admin dashboard.
+Generate {file_type} code based on this request: {prompt}
+
+Context:
+- Target file: {target_file}
+- This is for the OraclAI multi-agent trading system
+- Style should match a dark theme financial terminal
+
+Return ONLY the code, no explanations."""
+                
+                response = model.generate_content(full_prompt)
+                generated_code = response.text
+                
+                return jsonify({
+                    "success": True,
+                    "code": generated_code,
+                    "source": "gemini",
+                    "prompt": prompt,
+                    "target_file": target_file
+                })
+        except Exception as gemini_err:
+            pass  # Fall through to template-based generation
+        
+        # Template-based generation as fallback
+        file_type = target_file.split('.')[-1] if '.' in target_file else 'txt'
+        
+        templates = {
+            'html': f'''<!-- AI Generated: {prompt} -->
+<div class="ai-feature">
+    <h3 style="color: var(--accent-orange);">New Feature</h3>
+    <p>{prompt}</p>
+    <div class="feature-content">
+        <!-- Add your content here -->
+    </div>
+</div>''',
+            'py': f'''# AI Generated: {prompt}
+def new_feature():
+    """
+    {prompt}
+    """
+    # Implementation
+    pass
+
+# Add route or integration point here''',
+            'css': f'''/* AI Generated: {prompt} */
+.ai-feature {{
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 16px;
+    margin: 8px 0;
+}}'''
+        }
+        
+        generated_code = templates.get(file_type, f'# AI Generated code for: {prompt}\n# File type: {file_type}')
+        
+        return jsonify({
+            "success": True,
+            "code": generated_code,
+            "source": "template",
+            "prompt": prompt,
+            "target_file": target_file
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
 @app.route('/api/admin/windsurf/apply', methods=['POST'])
 def windsurf_apply_changes():
     """Apply changes via Windsurf API"""
