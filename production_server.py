@@ -855,6 +855,128 @@ def windsurf_apply_changes():
         "applied_count": len([r for r in results if r['status'] in ('created', 'edited', 'deleted')])
     })
 
+@app.route('/api/v1/multi-domain/classify', methods=['POST'])
+def classify_domain():
+    """Classify query and route to appropriate domain system"""
+    data = request.get_json() or {}
+    query = data.get('query', '').strip()
+    
+    if not query:
+        return jsonify({"error": "Query required"}), 400
+    
+    try:
+        from multi_domain.unified_orchestrator import unified_orchestrator
+        result = unified_orchestrator.process_query(query, data.get('context', {}))
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"Domain classification error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/multi-domain/quick', methods=['POST'])
+def quick_domain_analysis():
+    """Quick non-streaming analysis for any domain"""
+    data = request.get_json() or {}
+    query = data.get('query', '').strip()
+    domain_hint = data.get('domain')  # Optional hint
+    
+    if not query:
+        return jsonify({"error": "Query required"}), 400
+    
+    try:
+        from multi_domain.unified_orchestrator import unified_orchestrator
+        result = unified_orchestrator.quick_analyze(query, domain_hint)
+        return jsonify({
+            "success": True,
+            "query": query,
+            "domain_hint": domain_hint,
+            "result": result
+        })
+    except Exception as e:
+        log.error(f"Quick analysis error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/multi-domain/status/<session_id>')
+def multi_domain_status(session_id):
+    """Get status of multi-domain session"""
+    try:
+        from multi_domain.unified_orchestrator import unified_orchestrator
+        status = unified_orchestrator.get_session_status(session_id)
+        return jsonify({"success": True, **status})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/multi-domain/result/<session_id>')
+def multi_domain_result(session_id):
+    """Get result from multi-domain session"""
+    try:
+        from multi_domain.unified_orchestrator import unified_orchestrator
+        result = unified_orchestrator.get_result(session_id)
+        if result:
+            return jsonify({"success": True, "result": result})
+        return jsonify({"success": False, "error": "Result not ready"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/multi-domain/domains')
+def list_domains():
+    """List all available domains and their agents"""
+    try:
+        from multi_domain.unified_orchestrator import unified_orchestrator
+        domains = unified_orchestrator.get_all_domains()
+        return jsonify({"success": True, "domains": domains, "count": len(domains)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/multi-domain/stream/<session_id>')
+def multi_domain_stream(session_id):
+    """SSE stream for multi-domain analysis updates"""
+    def generate():
+        try:
+            from multi_domain.unified_orchestrator import unified_orchestrator
+            
+            # Send initial connection
+            yield f"data: {json.dumps({'type': 'connected', 'session_id': session_id})}\n\n"
+            
+            last_status = None
+            max_checks = 120  # 60 seconds max
+            checks = 0
+            
+            while checks < max_checks:
+                status = unified_orchestrator.get_session_status(session_id)
+                current_status = status.get('status')
+                
+                if current_status != last_status:
+                    yield f"data: {json.dumps({'type': 'status', 'data': status})}\n\n"
+                    last_status = current_status
+                
+                if current_status == 'complete':
+                    result = unified_orchestrator.get_result(session_id)
+                    if result:
+                        yield f"data: {json.dumps({'type': 'complete', 'result': result})}\n\n"
+                    break
+                
+                if current_status == 'error':
+                    yield f"data: {json.dumps({'type': 'error', 'message': status.get('error', 'Unknown error')})}\n\n"
+                    break
+                
+                time.sleep(0.5)
+                checks += 1
+            
+            yield f"data: {json.dumps({'type': 'closed'})}\n\n"
+            
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+    
+    return Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no',
+            'Access-Control-Allow-Origin': '*'
+        }
+    )
+
 HTML_ADMIN_LOGIN = '''<!DOCTYPE html>
 <html lang="en">
 <head>

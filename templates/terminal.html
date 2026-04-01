@@ -833,7 +833,7 @@
             showTyping();
             
             try {
-                // First classify the input
+                // First classify the input for domain routing
                 const classifyResponse = await fetch('/api/v1/classify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -843,18 +843,194 @@
                 const classification = await classifyResponse.json();
                 
                 if (classification.type === 'single_stock') {
-                    await analyzeStock(classification.symbol, message);
+                    await analyzeStock(classification.ticker, message);
                 } else if (classification.type === 'ranking') {
                     await handleRankingQuery(message);
                 } else {
-                    // General query - use fallback or chat
-                    hideTyping();
-                    addMessage('agent', `I can help you with stock analysis. Try asking about a specific stock (e.g., "Analyze AAPL") or ask for "Top 5 picks this week".`);
+                    // Route to multi-domain system
+                    await handleMultiDomainQuery(message);
                 }
             } catch (error) {
                 hideTyping();
                 addMessage('agent', 'Sorry, I encountered an error processing your request. Please try again.');
             }
+        }
+        
+        async function handleMultiDomainQuery(message) {
+            // Route query to appropriate domain system
+            try {
+                // Classify for domain
+                const domainResponse = await fetch('/api/v1/multi-domain/classify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: message })
+                });
+                
+                const domainData = await domainResponse.json();
+                
+                if (!domainData.success) {
+                    hideTyping();
+                    addMessage('agent', 'I couldn\'t process that query. Please try again.');
+                    return;
+                }
+                
+                const domain = domainData.domain;
+                const sessionId = domainData.session_id;
+                
+                hideTyping();
+                
+                // Show domain-specific message
+                const domainColors = {
+                    'finance': '#22c55e',
+                    'code': '#3b82f6',
+                    'stem': '#8b5cf6',
+                    'writing': '#f59e0b',
+                    'literature': '#ec4899',
+                    'general': '#6b7280'
+                };
+                
+                const domainIcons = {
+                    'finance': '📈',
+                    'code': '💻',
+                    'stem': '🔬',
+                    'writing': '✍️',
+                    'literature': '📚',
+                    'general': '🤔'
+                };
+                
+                const color = domainColors[domain] || '#6b7280';
+                const icon = domainIcons[domain] || '🤔';
+                
+                const analysisDiv = addMessage('agent', 
+                    `${icon} <b>${domain.toUpperCase()}</b> Analysis Starting...<br>` +
+                    `<span style="color: ${color}; font-size: 13px;">` +
+                    `Domain: ${domain} | Routing to ${domainData.classification.system}</span>`
+                );
+                
+                // Show agent thoughts container for multi-domain
+                const thoughtsDiv = document.createElement('div');
+                thoughtsDiv.className = 'agent-thoughts';
+                thoughtsDiv.innerHTML = `
+                    <div class="thought-header">🧠 Multi-Agent Thought Process</div>
+                    <div id="thoughts-${sessionId}">
+                        <div style="padding: 12px; color: var(--text-secondary);">
+                            Initializing ${domain} agents...
+                        </div>
+                    </div>
+                `;
+                analysisDiv.querySelector('.message-content').appendChild(thoughtsDiv);
+                
+                // Start streaming updates for multi-domain
+                startMultiDomainStream(sessionId, domain, analysisDiv);
+                
+            } catch (error) {
+                hideTyping();
+                addMessage('agent', 'Multi-domain analysis temporarily unavailable. Using fallback response.');
+                
+                // Fallback to simple response
+                setTimeout(() => {
+                    addMessage('agent', `I can help with:<br>• Finance/stock analysis<br>• Code review<br>• STEM questions<br>• Writing assistance<br>• Literature analysis<br><br>Try asking about any of these topics!`);
+                }, 500);
+            }
+        }
+        
+        function startMultiDomainStream(sessionId, domain, messageDiv) {
+            const eventSource = new EventSource(`/api/v1/multi-domain/stream/${sessionId}`);
+            const thoughtsContainer = messageDiv.querySelector(`#thoughts-${sessionId}`);
+            
+            let agentPositions = [];
+            
+            eventSource.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'status') {
+                    thoughtsContainer.innerHTML = `
+                        <div style="padding: 12px; color: var(--text-secondary);">
+                            Status: ${data.data.status} | Round: ${data.data.round}/${data.data.total_rounds}<br>
+                            Agents: ${data.data.agent_count}
+                        </div>
+                    `;
+                } else if (data.type === 'complete') {
+                    eventSource.close();
+                    showMultiDomainResult(messageDiv, data.result, domain);
+                } else if (data.type === 'error') {
+                    eventSource.close();
+                    thoughtsContainer.innerHTML += `<div style="color: var(--accent-red); padding: 12px;">⚠️ ${data.message}</div>`;
+                }
+            };
+            
+            eventSource.onerror = () => {
+                eventSource.close();
+                // Fallback - show result from REST API
+                fetchMultiDomainResult(sessionId, messageDiv, domain);
+            };
+        }
+        
+        async function fetchMultiDomainResult(sessionId, messageDiv, domain) {
+            try {
+                const response = await fetch(`/api/v1/multi-domain/result/${sessionId}`);
+                const data = await response.json();
+                
+                if (data.success && data.result) {
+                    showMultiDomainResult(messageDiv, data.result, domain);
+                } else {
+                    messageDiv.querySelector('.message-content').innerHTML += 
+                        '<div style="color: var(--text-secondary); padding: 12px;">Result pending... Try refreshing.</div>';
+                }
+            } catch (e) {
+                console.error('Failed to fetch result:', e);
+            }
+        }
+        
+        function showMultiDomainResult(messageDiv, result, domain) {
+            const consensus = result.consensus_reached ? '✓ CONSENSUS' : '⚠️ DIVERGENT VIEWS';
+            const confidence = Math.round(result.confidence * 100);
+            
+            const domainColors = {
+                'finance': '#22c55e',
+                'code': '#3b82f6',
+                'stem': '#8b5cf6',
+                'writing': '#f59e0b',
+                'literature': '#ec4899',
+                'general': '#6b7280'
+            };
+            
+            const color = domainColors[domain] || '#6b7280';
+            
+            // Format agent positions
+            const agentHtml = result.agent_positions.map(pos => `
+                <div style="margin: 8px 0; padding: 10px; background: var(--bg-tertiary); border-radius: 6px; border-left: 3px solid ${color};">
+                    <div style="font-weight: 600; color: ${color};">${pos.agent}</div>
+                    <div style="font-size: 12px; color: var(--text-secondary);">
+                        Stance: ${pos.stance} | Confidence: ${Math.round(pos.confidence * 100)}%
+                    </div>
+                    <div style="font-size: 13px; margin-top: 6px; color: var(--text-primary);">
+                        ${pos.reasoning}
+                    </div>
+                </div>
+            `).join('');
+            
+            const resultDiv = document.createElement('div');
+            resultDiv.style.cssText = `margin-top: 16px; padding: 16px; background: ${color}20; border: 2px solid ${color}; border-radius: 8px;`;
+            resultDiv.innerHTML = `
+                <div style="font-size: 16px; font-weight: 700; color: ${color}; margin-bottom: 12px;">
+                    ${consensus} (${confidence}% confidence)
+                </div>
+                <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 12px;">
+                    Domain: ${domain.toUpperCase()} | Debate rounds: ${result.debate_rounds}
+                </div>
+                <div style="font-size: 13px; color: var(--text-primary); line-height: 1.6;">
+                    ${result.final_answer.replace(/\n/g, '<br>')}
+                </div>
+                <div style="margin-top: 16px; border-top: 1px solid var(--border-color); padding-top: 12px;">
+                    <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 8px;">
+                        Agent Positions
+                    </div>
+                    ${agentHtml}
+                </div>
+            `;
+            
+            messageDiv.querySelector('.message-content').appendChild(resultDiv);
         }
         
         async function analyzeStock(symbol, originalQuery) {
