@@ -24,6 +24,8 @@
             color: var(--text-primary);
             height: 100vh;
             overflow: hidden;
+            margin: 0;
+            padding: 0;
         }
         .terminal-container {
             display: grid;
@@ -52,7 +54,7 @@
             align-items: center;
             justify-content: center;
             font-weight: bold;
-            font-size: 18px;
+            font-size: 16px;
         }
         .logo-text {
             font-size: 20px;
@@ -61,6 +63,12 @@
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
+        }
+        .logo-subtitle {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: -2px;
+            letter-spacing: 0.5px;
         }
         .header-stats {
             display: flex;
@@ -524,8 +532,11 @@
     <div class="terminal-container">
         <header class="header">
             <div class="logo">
-                <div class="logo-icon">O</div>
-                <div class="logo-text">ORACLAI</div>
+                <div class="logo-icon">◉</div>
+                <div>
+                    <div class="logo-text">OraclAI</div>
+                    <div class="logo-subtitle">MULTI-DOMAIN AI</div>
+                </div>
             </div>
             <div class="header-stats" id="marketStats">
                 <div class="stat">
