@@ -805,6 +805,150 @@ def windsurf_apply_changes():
         "applied_count": len([r for r in results if r['status'] in ('created', 'edited', 'deleted')])
     })
 
+# Advanced AI Assistant endpoints - NO EXTERNAL APIs!
+@app.route('/api/admin/windsurf/refactor', methods=['POST'])
+def windsurf_refactor():
+    """Refactor code using AI (self-contained, no external APIs)"""
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    data = request.get_json() or {}
+    code = data.get('code', '')
+    file_path = data.get('file_path', '')
+    refactor_type = data.get('refactor_type', 'auto')
+    
+    if not code or not file_path:
+        return jsonify({"error": "Code and file_path required"}), 400
+    
+    try:
+        from windsurf_ai_engine import CodeRefactorer, CodeLanguage
+        
+        # Detect language
+        if file_path.endswith('.py'):
+            language = CodeLanguage.PYTHON
+            new_code, changes = CodeRefactorer.refactor_python(code, refactor_type)
+        elif file_path.endswith('.html'):
+            language = CodeLanguage.HTML
+            new_code, changes = CodeRefactorer.refactor_html(code, refactor_type)
+        elif file_path.endswith('.css'):
+            language = CodeLanguage.CSS
+            new_code, changes = CodeRefactorer.refactor_css(code, refactor_type)
+        else:
+            return jsonify({"error": "Unsupported file type for refactoring"}), 400
+        
+        return jsonify({
+            "success": True,
+            "original_code": code,
+            "refactored_code": new_code,
+            "changes": changes,
+            "language": language.value,
+            "refactor_type": refactor_type
+        })
+    except Exception as e:
+        log.error(f"Refactoring error: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/admin/windsurf/analyze', methods=['POST'])
+def windsurf_analyze():
+    """Analyze code quality using AI (self-contained, no external APIs)"""
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    data = request.get_json() or {}
+    code = data.get('code', '')
+    file_path = data.get('file_path', '')
+    
+    if not code or not file_path:
+        return jsonify({"error": "Code and file_path required"}), 400
+    
+    try:
+        from windsurf_ai_engine import analyze_code_quality
+        
+        analysis = analyze_code_quality(code, file_path)
+        
+        return jsonify({
+            "success": True,
+            "analysis": analysis,
+            "file_path": file_path,
+            "code_length": len(code),
+            "line_count": len(code.split('\n'))
+        })
+    except Exception as e:
+        log.error(f"Analysis error: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/admin/windsurf/completions', methods=['POST'])
+def windsurf_completions():
+    """Get smart code completions (self-contained, no external APIs)"""
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    data = request.get_json() or {}
+    prefix = data.get('prefix', '')
+    file_path = data.get('file_path', '')
+    context = data.get('context', '')
+    
+    if not prefix or not file_path:
+        return jsonify({"error": "Prefix and file_path required"}), 400
+    
+    try:
+        from windsurf_ai_engine import SmartCompleter, CodeLanguage
+        
+        # Detect language
+        if file_path.endswith('.py'):
+            language = CodeLanguage.PYTHON
+        elif file_path.endswith('.html'):
+            language = CodeLanguage.HTML
+        elif file_path.endswith('.css'):
+            language = CodeLanguage.CSS
+        elif file_path.endswith('.js'):
+            language = CodeLanguage.JAVASCRIPT
+        else:
+            return jsonify({"completions": []})
+        
+        completions = SmartCompleter.get_completions(language, prefix, context)
+        
+        return jsonify({
+            "success": True,
+            "completions": completions,
+            "language": language.value,
+            "prefix": prefix
+        })
+    except Exception as e:
+        log.error(f"Completions error: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/admin/windsurf/templates', methods=['GET'])
+def windsurf_list_templates():
+    """List available code templates"""
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    language = request.args.get('language', '')
+    
+    try:
+        from windsurf_ai_engine import CodeTemplateLibrary, CodeLanguage
+        
+        lang_map = {
+            'python': CodeLanguage.PYTHON,
+            'html': CodeLanguage.HTML,
+            'css': CodeLanguage.CSS,
+            'javascript': CodeLanguage.JAVASCRIPT
+        }
+        
+        if language in lang_map:
+            templates = CodeTemplateLibrary.list_templates(lang_map[language])
+        else:
+            templates = []
+        
+        return jsonify({
+            "success": True,
+            "templates": templates,
+            "language": language
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route('/api/v1/multi-domain/classify', methods=['POST'])
 def classify_domain():
     """Classify query and route to appropriate domain system"""
