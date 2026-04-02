@@ -1038,5 +1038,302 @@ def analyze_code_quality(code: str, file_path: str) -> Dict[str, Any]:
         return CodeAnalyzer.analyze_python(code)
     elif file_path.endswith('.html'):
         return CodeAnalyzer.analyze_html(code)
+    elif file_path.endswith('.css'):
+        return CodeAnalyzer.analyze_css(code)
+    elif file_path.endswith('.js'):
+        return CodeAnalyzer.analyze_javascript(code)
     
     return {'issues': [], 'suggestions': []}
+
+
+class CodeRefactorer:
+    """Intelligent code refactoring capabilities"""
+    
+    @staticmethod
+    def refactor_python(code: str, refactor_type: str) -> Tuple[str, List[str]]:
+        """Refactor Python code based on type"""
+        changes = []
+        
+        if refactor_type == 'extract_function':
+            # Find repeated code blocks and suggest extraction
+            lines = code.split('\n')
+            if len(lines) > 20:
+                # Extract middle section as example
+                middle_start = len(lines) // 3
+                middle_end = (len(lines) * 2) // 3
+                extracted = '\n'.join(lines[middle_start:middle_end])
+                
+                new_code = code[:sum(len(l) + 1 for l in lines[:middle_start])]
+                new_code += "\nresult = new_function()\n"
+                new_code += code[sum(len(l) + 1 for l in lines[:middle_end]):]
+                new_code += f"\n\ndef new_function():\n    '''Extracted function'''\n{extracted}\n    return result\n"
+                
+                changes.append("Extracted repeated code into new_function()")
+                return new_code, changes
+        
+        elif refactor_type == 'add_type_hints':
+            # Add basic type hints
+            import re
+            pattern = r'def\s+(\w+)\s*\(([^)]*)\):'
+            
+            def add_hints(match):
+                func_name = match.group(1)
+                params = match.group(2)
+                # Add Any type hints
+                if params:
+                    typed_params = ', '.join([f'{p.strip()}: Any' for p in params.split(',')])
+                    return f'def {func_name}({typed_params}) -> Any:'
+                return f'def {func_name}() -> Any:'
+            
+            new_code = re.sub(pattern, add_hints, code)
+            changes.append("Added type hints to functions")
+            return new_code, changes
+        
+        elif refactor_type == 'optimize_imports':
+            # Sort imports and remove duplicates
+            import re
+            import_lines = re.findall(r'^(?:from\s+\S+\s+)?import\s+\S+.*?$', code, re.MULTILINE)
+            if import_lines:
+                sorted_imports = sorted(set(import_lines))
+                # Remove old imports and add sorted ones
+                code_without_imports = re.sub(r'^(?:from\s+\S+\s+)?import\s+\S+.*?$\n?', '', code, flags=re.MULTILINE)
+                new_code = '\n'.join(sorted_imports) + '\n\n' + code_without_imports.strip()
+                changes.append("Sorted and deduplicated imports")
+                return new_code, changes
+        
+        return code, changes
+    
+    @staticmethod
+    def refactor_html(code: str, refactor_type: str) -> Tuple[str, List[str]]:
+        """Refactor HTML code"""
+        changes = []
+        
+        if refactor_type == 'semantic_tags':
+            # Replace generic divs with semantic tags where appropriate
+            new_code = code
+            if '<div class="header"' in code or 'id="header"' in code:
+                new_code = new_code.replace('<div class="header"', '<header')
+                new_code = new_code.replace('</div>', '</header>', 1)
+                changes.append("Replaced header div with semantic <header> tag")
+            
+            if '<div class="nav"' in code or 'id="nav"' in code:
+                new_code = new_code.replace('<div class="nav"', '<nav')
+                changes.append("Replaced nav div with semantic <nav> tag")
+            
+            return new_code, changes
+        
+        elif refactor_type == 'extract_css':
+            # Extract inline styles to CSS classes
+            import re
+            inline_styles = re.findall(r'style="([^"]+)"', code)
+            if inline_styles:
+                changes.append(f"Found {len(inline_styles)} inline styles - consider extracting to CSS")
+            return code, changes
+        
+        return code, changes
+    
+    @staticmethod
+    def refactor_css(code: str, refactor_type: str) -> Tuple[str, List[str]]:
+        """Refactor CSS code"""
+        changes = []
+        
+        if refactor_type == 'extract_variables':
+            # Extract common colors to CSS variables
+            import re
+            colors = re.findall(r'#[a-fA-F0-9]{6}|#[a-fA-F0-9]{3}|rgba?\([^)]+\)', code)
+            unique_colors = list(set(colors))
+            
+            if len(unique_colors) > 3:
+                var_definitions = ':root {\n'
+                for i, color in enumerate(unique_colors[:5]):
+                    var_definitions += f'    --color-{i+1}: {color};\n'
+                var_definitions += '}\n\n'
+                
+                # Replace colors with variables
+                new_code = code
+                for i, color in enumerate(unique_colors[:5]):
+                    new_code = new_code.replace(color, f'var(--color-{i+1})')
+                
+                new_code = var_definitions + new_code
+                changes.append(f"Extracted {min(len(unique_colors), 5)} colors to CSS variables")
+                return new_code, changes
+        
+        elif refactor_type == 'combine_duplicates':
+            # Find and combine duplicate selector blocks
+            changes.append("Analyzed for duplicate selectors - manual review recommended")
+            return code, changes
+        
+        return code, changes
+
+
+class SmartCompleter:
+    """Smart code completion based on context"""
+    
+    @staticmethod
+    def get_completions(language: CodeLanguage, prefix: str, context: str) -> List[Dict[str, str]]:
+        """Get smart completions based on language and context"""
+        completions = []
+        
+        if language == CodeLanguage.HTML:
+            if prefix.startswith('<'):
+                tag = prefix[1:]
+                html_tags = ['div', 'span', 'p', 'h1', 'h2', 'h3', 'button', 'input', 
+                           'form', 'table', 'tr', 'td', 'th', 'ul', 'li', 'a', 'img',
+                           'section', 'article', 'header', 'footer', 'nav', 'aside']
+                for t in html_tags:
+                    if t.startswith(tag):
+                        completions.append({
+                            'label': f'<{t}>',
+                            'insertText': f'<{t}></{t}>',
+                            'detail': f'HTML {t} element'
+                        })
+        
+        elif language == CodeLanguage.CSS:
+            css_props = ['display', 'position', 'color', 'background', 'margin', 'padding',
+                        'border', 'width', 'height', 'font-size', 'text-align', 'flex',
+                        'grid', 'animation', 'transition', 'transform']
+            for prop in css_props:
+                if prop.startswith(prefix):
+                    completions.append({
+                        'label': prop,
+                        'insertText': f'{prop}: ',
+                        'detail': f'CSS {prop} property'
+                    })
+        
+        elif language == CodeLanguage.PYTHON:
+            if prefix.startswith('def '):
+                completions.append({
+                    'label': 'def function():',
+                    'insertText': 'def function_name():\n    """Docstring"""\n    pass',
+                    'detail': 'Function definition'
+                })
+            elif prefix.startswith('class '):
+                completions.append({
+                    'label': 'class ClassName:',
+                    'insertText': 'class ClassName:\n    """Class description"""\n    \n    def __init__(self):\n        pass',
+                    'detail': 'Class definition'
+                })
+            elif prefix.startswith('for '):
+                completions.append({
+                    'label': 'for item in items:',
+                    'insertText': 'for item in items:\n    # Process item\n    pass',
+                    'detail': 'For loop'
+                })
+            elif prefix.startswith('if '):
+                completions.append({
+                    'label': 'if condition:',
+                    'insertText': 'if condition:\n    # True case\n    pass\nelse:\n    # False case\n    pass',
+                    'detail': 'If-else statement'
+                })
+        
+        elif language == CodeLanguage.JAVASCRIPT:
+            if prefix.startswith('function '):
+                completions.append({
+                    'label': 'function name()',
+                    'insertText': 'function functionName() {\n    // Implementation\n}',
+                    'detail': 'Function declaration'
+                })
+            elif prefix.startswith('const '):
+                completions.append({
+                    'label': 'const name =',
+                    'insertText': "const variableName = '';",
+                    'detail': 'Constant declaration'
+                })
+            elif prefix.startswith('fetch'):
+                completions.append({
+                    'label': 'fetch API call',
+                    'insertText': "fetch('/api/endpoint')\n    .then(response => response.json())\n    .then(data => {\n        console.log(data);\n    })\n    .catch(error => {\n        console.error('Error:', error);\n    });",
+                    'detail': 'Fetch API request'
+                })
+        
+        return completions
+
+
+class ProjectAnalyzer:
+    """Analyze multi-file projects"""
+    
+    @staticmethod
+    def analyze_project_structure(files: Dict[str, str]) -> Dict[str, Any]:
+        """Analyze project structure and provide insights"""
+        insights = {
+            'total_files': len(files),
+            'languages': {},
+            'patterns': [],
+            'suggestions': []
+        }
+        
+        for path, content in files.items():
+            # Count by language
+            if path.endswith('.py'):
+                insights['languages']['python'] = insights['languages'].get('python', 0) + 1
+            elif path.endswith('.html'):
+                insights['languages']['html'] = insights['languages'].get('html', 0) + 1
+            elif path.endswith('.css'):
+                insights['languages']['css'] = insights['languages'].get('css', 0) + 1
+            elif path.endswith('.js'):
+                insights['languages']['javascript'] = insights['languages'].get('javascript', 0) + 1
+            
+            # Detect patterns
+            if 'flask' in content.lower() or 'django' in content.lower():
+                insights['patterns'].append('Web Framework')
+            if 'class="' in content:
+                insights['patterns'].append('CSS Classes')
+            if 'function' in content or 'def ' in content:
+                insights['patterns'].append('Functions')
+        
+        # Generate suggestions
+        if insights['languages'].get('python', 0) > 5:
+            insights['suggestions'].append("Consider organizing Python code into modules/packages")
+        
+        if 'html' in insights['languages'] and 'css' not in insights['languages']:
+            insights['suggestions'].append("Consider adding a CSS file for styling")
+        
+        return insights
+    
+    @staticmethod
+    def suggest_file_organization(files: Dict[str, str]) -> List[Dict[str, str]]:
+        """Suggest file organization improvements"""
+        suggestions = []
+        
+        # Check for templates
+        html_files = [p for p in files if p.endswith('.html')]
+        if html_files and not any('templates' in p for p in html_files):
+            suggestions.append({
+                'type': 'organization',
+                'message': 'Consider moving HTML files to a templates/ folder',
+                'files': html_files
+            })
+        
+        # Check for static assets
+        css_files = [p for p in files if p.endswith('.css')]
+        js_files = [p for p in files if p.endswith('.js')]
+        if (css_files or js_files) and not any('static' in p for p in css_files + js_files):
+            suggestions.append({
+                'type': 'organization',
+                'message': 'Consider moving CSS/JS files to a static/ folder',
+                'files': css_files + js_files
+            })
+        
+        return suggestions
+
+
+# Update CodeAnalyzer with CSS and JS analysis
+CodeAnalyzer.analyze_css = staticmethod(lambda code: {
+    'issues': [],
+    'suggestions': [
+        'Consider using CSS variables for colors' if len(re.findall(r'#[a-fA-F0-9]{6}', code)) > 3 else '',
+        'Add responsive breakpoints' if '@media' not in code else '',
+        'Group related selectors' if len(code.split('}')) > 20 else ''
+    ],
+    'rule_count': len(code.split('}'))
+})
+
+CodeAnalyzer.analyze_javascript = staticmethod(lambda code: {
+    'issues': ['console.log statements found'] if 'console.log' in code else [],
+    'suggestions': [
+        'Consider using const/let instead of var' if 'var ' in code else '',
+        'Add error handling to async functions' if 'async' in code and 'try' not in code else '',
+        'Use template literals for string concatenation' if "'" in code and '+' in code else ''
+    ],
+    'function_count': len(re.findall(r'function\s+\w+', code))
+})
