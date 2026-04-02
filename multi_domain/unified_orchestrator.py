@@ -11,6 +11,7 @@ from datetime import datetime
 # Import all domain systems
 from multi_domain.domain_router import router
 from multi_domain.code_system import code_ai
+from multi_domain.finance_system import finance_ai
 from multi_domain.stem_system import stem_ai
 from multi_domain.writing_system import writing_ai
 from multi_domain.literature_system import literature_ai
@@ -24,7 +25,7 @@ class UnifiedOrchestrator:
     
     def __init__(self):
         self.domain_systems = {
-            'finance': None,  # Will use existing trading orchestrator
+            'finance': finance_ai,
             'code': code_ai,
             'stem': stem_ai,
             'writing': writing_ai,
@@ -47,37 +48,13 @@ class UnifiedOrchestrator:
         domain = classification['domain']
         
         # Step 2: Route to appropriate system
-        if domain == 'finance':
-            # Use existing finance/trading system
-            return self._route_to_finance(query, context, classification)
-        elif domain in self.domain_systems:
+        if domain in self.domain_systems:
             system = self.domain_systems[domain]
             return self._route_to_system(domain, system, query, context, classification)
         else:
             # Fallback to general
             return self._route_to_system('general', self.domain_systems['general'], 
                                         query, context, classification)
-    
-    def _route_to_finance(self, query: str, context: Dict, classification: Dict) -> Dict:
-        """Route finance queries to existing trading system"""
-        # Import and use the existing orchestrator
-        try:
-            from quant_ecosystem.orchestrator import orchestrate_trade_decision
-            # For finance, we use the existing endpoint, return routing info
-            return {
-                'success': True,
-                'domain': 'finance',
-                'classification': classification,
-                'route_to': '/api/v1/debate/start',
-                'message': 'Finance query - use trading API endpoint',
-                'estimated_time': '2-3 minutes'
-            }
-        except ImportError:
-            return {
-                'success': False,
-                'domain': 'finance',
-                'error': 'Finance system not available'
-            }
     
     def _route_to_system(self, domain: str, system, query: str, context: Dict, 
                         classification: Dict) -> Dict:
@@ -161,10 +138,6 @@ class UnifiedOrchestrator:
             # Auto-classify
             classification = self.router.classify(query)
             domain = classification['domain']
-            
-            if domain == 'finance':
-                return "Finance queries require full debate API. Use /api/v1/debate/start"
-            
             system = self.domain_systems.get(domain, self.domain_systems['general'])
         
         # Start debate
