@@ -1308,31 +1308,72 @@
             }
             
             document.getElementById('aiResult').style.display = 'block';
-            document.getElementById('aiGeneratedCode').textContent = '⏳ Generating with Windsurf AI...';
+            document.getElementById('aiGeneratedCode').textContent = '⏳ Windsurf AI is generating code...';
             
             try {
                 const response = await fetch('/api/admin/windsurf/ai-generate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt: prompt, target_file: aiTargetFile })
+                    body: JSON.stringify({ 
+                        prompt: prompt, 
+                        target_file: aiTargetFile,
+                        current_content: windsurfCurrentFile ? document.getElementById('windsurfEditor').value : ''
+                    })
                 });
                 const data = await response.json();
                 if (data.success) {
                     aiGeneratedContent = data.code;
-                    document.getElementById('aiGeneratedCode').textContent = data.code;
+                    
+                    // Enhanced display with explanation and suggestions
+                    let displayHTML = '';
+                    
+                    // Confidence badge
+                    const confidence = Math.round((data.confidence || 0.5) * 100);
+                    const confidenceColor = confidence > 80 ? 'var(--accent-green)' : confidence > 50 ? 'var(--accent-orange)' : 'var(--accent-red)';
+                    displayHTML += `<div style="margin-bottom: 12px; display: flex; align-items: center; gap: 12px;">`;
+                    displayHTML += `<span style="background: ${confidenceColor}20; color: ${confidenceColor}; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600;">${confidence}% Confidence</span>`;
+                    displayHTML += `<span style="color: var(--text-secondary); font-size: 12px;">${data.language || 'Code'}</span>`;
+                    displayHTML += `</div>`;
+                    
+                    // Explanation
+                    if (data.explanation) {
+                        displayHTML += `<div style="background: var(--bg-secondary); border-left: 3px solid var(--accent-blue); padding: 12px; margin-bottom: 12px; border-radius: 0 8px 8px 0; font-size: 13px; color: var(--text-secondary);">`;
+                        displayHTML += `<strong style="color: var(--accent-blue);">🤖 AI Explanation:</strong> ${data.explanation}`;
+                        displayHTML += `</div>`;
+                    }
+                    
+                    // Generated code
+                    displayHTML += `<pre id="aiGeneratedCodeContent" style="font-family: monospace; font-size: 12px; color: var(--text-primary); overflow-x: auto; white-space: pre-wrap; max-height: 300px; overflow-y: auto; background: var(--bg-tertiary); padding: 16px; border-radius: 8px; border: 1px solid var(--border-color);">${escapeHtml(data.code)}</pre>`;
+                    
+                    // Suggestions
+                    if (data.suggestions && data.suggestions.length > 0) {
+                        displayHTML += `<div style="margin-top: 12px; padding: 12px; background: var(--bg-secondary); border-radius: 8px;">`;
+                        displayHTML += `<div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 8px;">💡 Suggestions</div>`;
+                        displayHTML += `<ul style="margin: 0; padding-left: 16px; font-size: 12px; color: var(--text-secondary);">`;
+                        data.suggestions.forEach(s => {
+                            displayHTML += `<li style="margin-bottom: 4px;">${escapeHtml(s)}</li>`;
+                        });
+                        displayHTML += `</ul></div>`;
+                    }
+                    
+                    document.getElementById('aiGeneratedCode').innerHTML = displayHTML;
                 } else {
-                    document.getElementById('aiGeneratedCode').textContent = 'Error: ' + data.error;
+                    document.getElementById('aiGeneratedCode').innerHTML = `<div style="color: var(--accent-red);">Error: ${data.error || 'Generation failed'}</div>`;
                 }
             } catch (e) {
-                // Fallback simulation for demo
-                aiGeneratedContent = `<!-- AI Generated Change -->
-<!-- ${prompt} -->
-<div class="new-feature">
-    <h3>New Feature Added</h3>
-    <p>This was generated based on your request: "${prompt}"</p>
-</div>`;
-                document.getElementById('aiGeneratedCode').textContent = aiGeneratedContent;
+                console.error('AI generation error:', e);
+                document.getElementById('aiGeneratedCode').innerHTML = `<div style="color: var(--accent-red);">Error: ${e.message}</div>`;
             }
+        }
+        
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
         }
         
         function applyAIChange() {
