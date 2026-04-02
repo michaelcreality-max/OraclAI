@@ -1105,28 +1105,60 @@
         }
         
         async function loadWindsurfFileTree() {
+            const container = document.getElementById('windsurfFileTree');
+            container.innerHTML = '<div style="padding: 12px; color: var(--text-secondary);">Loading files...</div>';
+            
             try {
+                console.log('Fetching file list...');
                 const response = await fetch('/api/admin/files?path=.');
+                console.log('File list response:', response.status);
                 const data = await response.json();
+                console.log('File list data:', data);
+                
                 if (data.success) {
-                    renderWindsurfFileTree(data.files);
+                    if (data.files && data.files.length > 0) {
+                        renderWindsurfFileTree(data.files);
+                    } else {
+                        container.innerHTML = '<div style="padding: 12px; color: var(--text-secondary);">No files found</div>';
+                    }
+                } else {
+                    container.innerHTML = `<div style="padding: 12px; color: var(--accent-red);">Error: ${data.error || 'Failed to load files'}</div>`;
                 }
             } catch (e) {
                 console.error('Failed to load file tree:', e);
+                container.innerHTML = `<div style="padding: 12px; color: var(--accent-red);">Error loading files: ${e.message}</div>`;
             }
         }
         
         function renderWindsurfFileTree(files, parentPath = '') {
             const container = document.getElementById('windsurfFileTree');
-            let html = '';
-            files.forEach(f => {
+            if (!files || files.length === 0) {
+                container.innerHTML = '<div style="padding: 12px; color: var(--text-secondary);">No files found</div>';
+                return;
+            }
+            
+            let html = '<div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase;">Click to edit</div>';
+            
+            // Sort: directories first, then files
+            const sorted = [...files].sort((a, b) => {
+                if (a.is_dir && !b.is_dir) return -1;
+                if (!a.is_dir && b.is_dir) return 1;
+                return a.name.localeCompare(b.name);
+            });
+            
+            sorted.forEach(f => {
                 const isSelected = windsurfCurrentFile === f.path;
+                const icon = f.is_dir ? '📁' : '📄';
+                const clickHandler = f.is_dir 
+                    ? `onclick="alert('Directory browsing not yet implemented. Click a file to edit.')"` 
+                    : `onclick="loadWindsurfFile('${f.path.replace(/'/g, "\\'")}')"`;
+                
                 html += `
-                    <div onclick="${f.is_dir ? `loadWindsurfDir('${f.path}')` : `loadWindsurfFile('${f.path}')`}" 
-                         style="cursor: pointer; padding: 6px 8px; border-radius: 4px; font-size: 12px; margin-left: ${parentPath ? '12px' : '0'};
-                         ${isSelected ? 'background: var(--accent-orange); color: white;' : 'background: transparent;'}
-                         ${!isSelected ? 'hover: background: var(--bg-secondary);' : ''}">
-                        ${f.is_dir ? '📁' : '📄'} ${f.name}
+                    <div ${clickHandler}
+                         style="cursor: pointer; padding: 8px; border-radius: 4px; font-size: 13px; margin-bottom: 2px;
+                         ${isSelected ? 'background: var(--accent-orange); color: white;' : 'background: transparent; color: var(--text-secondary);'}
+                         ${!isSelected ? 'hover:background: var(--bg-secondary);' : ''}">
+                        ${icon} ${f.name}
                     </div>
                 `;
             });
