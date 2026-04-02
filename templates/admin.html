@@ -1146,18 +1146,28 @@
             updateEditorTabs();
             
             try {
+                console.log('Loading file:', filepath);
                 const response = await fetch(`/api/admin/files/read?path=${encodeURIComponent(filepath)}`);
+                console.log('Response status:', response.status);
                 const data = await response.json();
+                console.log('Response data:', data);
+                
                 if (data.success) {
-                    document.getElementById('windsurfEditor').value = data.content;
+                    const editor = document.getElementById('windsurfEditor');
+                    editor.value = data.content;
                     windsurfOpenFiles[filepath].original = data.content;
                     windsurfOpenFiles[filepath].current = data.content;
                     updateEditorInfo(data.content);
-                    document.getElementById('windsurfEditorStatus').textContent = 'Ready';
+                    document.getElementById('windsurfEditorStatus').textContent = '✓ Ready';
                     loadWindsurfFileTree();
+                } else {
+                    document.getElementById('windsurfEditorStatus').textContent = 'Error: ' + (data.error || 'Failed to load');
+                    document.getElementById('windsurfEditor').value = `// Error loading ${filepath}:\n// ${data.error || 'Unknown error'}`;
                 }
             } catch (e) {
-                document.getElementById('windsurfEditorStatus').textContent = 'Error loading file';
+                console.error('Load file error:', e);
+                document.getElementById('windsurfEditorStatus').textContent = 'Error: ' + e.message;
+                document.getElementById('windsurfEditor').value = `// Error loading ${filepath}:\n// ${e.message}`;
             }
         }
         

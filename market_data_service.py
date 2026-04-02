@@ -4,6 +4,7 @@ Fetches real-time stock data from Yahoo Finance and other sources
 """
 
 import yfinance as yf
+import pandas as pd
 import requests
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
