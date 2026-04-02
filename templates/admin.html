@@ -831,10 +831,19 @@
                 <div style="width: 280px; background: var(--bg-tertiary); border-radius: 8px; padding: 12px; overflow-y: auto; display: flex; flex-direction: column;">
                     <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase;">Project Files</div>
                     <div id="windsurfFileTree" style="flex: 1; overflow-y: auto;"></div>
+                    
                     <div style="border-top: 1px solid var(--border-color); padding-top: 12px; margin-top: 12px;">
-                        <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px;">Quick Actions</div>
-                        <button class="btn-sm" style="width: 100%; margin-bottom: 6px;" onclick="windsurfAIAssist()">🤖 AI Assist</button>
-                        <button class="btn-sm" style="width: 100%;" onclick="showChangeHistory()">📋 History</button>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase;">🤖 AI Assistant</div>
+                        <button class="btn-sm" style="width: 100%; margin-bottom: 6px;" onclick="windsurfAIAssist()">✨ Generate Code</button>
+                        <button class="btn-sm" style="width: 100%; margin-bottom: 6px;" onclick="analyzeCurrentCode()">🔍 Analyze Code</button>
+                        <button class="btn-sm" style="width: 100%; margin-bottom: 6px;" onclick="refactorCurrentCode()">♻️ Quick Refactor</button>
+                        <button class="btn-sm" style="width: 100%; margin-bottom: 6px;" onclick="showTemplates()">📋 Templates</button>
+                        <button class="btn-sm" style="width: 100%;" onclick="showChangeHistory()">� History</button>
+                    </div>
+                    
+                    <div id="codeAnalysisPanel" style="border-top: 1px solid var(--border-color); padding-top: 12px; margin-top: 12px; display: none;">
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase;">📊 Analysis</div>
+                        <div id="analysisContent" style="font-size: 11px; color: var(--text-secondary);"></div>
                     </div>
                 </div>
                 <div style="flex: 1; display: flex; flex-direction: column;">
@@ -1282,6 +1291,140 @@
                 statusEl.textContent = '● Live';
                 statusEl.style.color = 'var(--accent-green)';
             }
+        }
+        
+        // AI Analysis function
+        async function analyzeCurrentCode() {
+            if (!windsurfCurrentFile) {
+                alert('Please open a file first');
+                return;
+            }
+            
+            const code = document.getElementById('windsurfEditor').value;
+            document.getElementById('windsurfEditorStatus').textContent = '🔍 Analyzing...';
+            
+            try {
+                const response = await fetch('/api/admin/windsurf/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        code: code, 
+                        file_path: windsurfCurrentFile 
+                    })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAnalysisPanel(data.analysis);
+                    document.getElementById('windsurfEditorStatus').textContent = '✓ Analysis complete';
+                } else {
+                    document.getElementById('windsurfEditorStatus').textContent = 'Analysis failed';
+                }
+            } catch (e) {
+                document.getElementById('windsurfEditorStatus').textContent = 'Error analyzing';
+            }
+        }
+        
+        function showAnalysisPanel(analysis) {
+            const panel = document.getElementById('codeAnalysisPanel');
+            const content = document.getElementById('analysisContent');
+            
+            let html = '';
+            
+            if (analysis.issues && analysis.issues.length > 0) {
+                html += '<div style="color: var(--accent-red); margin-bottom: 8px;">⚠️ Issues:</div>';
+                analysis.issues.forEach(issue => {
+                    html += `<div style="margin-bottom: 4px; padding-left: 8px;">• ${escapeHtml(issue)}</div>`;
+                });
+            }
+            
+            if (analysis.suggestions && analysis.suggestions.length > 0) {
+                html += '<div style="color: var(--accent-orange); margin: 8px 0 8px 0;">💡 Suggestions:</div>';
+                analysis.suggestions.forEach(sugg => {
+                    if (sugg) {
+                        html += `<div style="margin-bottom: 4px; padding-left: 8px;">• ${escapeHtml(sugg)}</div>`;
+                    }
+                });
+            }
+            
+            if (analysis.complexity) {
+                html += `<div style="margin-top: 8px; color: var(--text-secondary);">Complexity: ${analysis.complexity}</div>`;
+            }
+            
+            content.innerHTML = html || '<div style="color: var(--accent-green);">✓ Code looks good!</div>';
+            panel.style.display = 'block';
+        }
+        
+        // AI Refactor function
+        async function refactorCurrentCode() {
+            if (!windsurfCurrentFile) {
+                alert('Please open a file first');
+                return;
+            }
+            
+            const refactorTypes = ['add_type_hints', 'optimize_imports', 'extract_function'];
+            const type = refactorTypes[Math.floor(Math.random() * refactorTypes.length)];
+            
+            const code = document.getElementById('windsurfEditor').value;
+            document.getElementById('windsurfEditorStatus').textContent = '♻️ Refactoring...';
+            
+            try {
+                const response = await fetch('/api/admin/windsurf/refactor', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        code: code, 
+                        file_path: windsurfCurrentFile,
+                        refactor_type: type
+                    })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('windsurfEditor').value = data.refactored_code;
+                    document.getElementById('windsurfEditor').dispatchEvent(new Event('input'));
+                    document.getElementById('windsurfEditorStatus').textContent = '✓ Refactored: ' + data.changes.join(', ');
+                } else {
+                    document.getElementById('windsurfEditorStatus').textContent = 'Refactor failed';
+                }
+            } catch (e) {
+                document.getElementById('windsurfEditorStatus').textContent = 'Error refactoring';
+            }
+        }
+        
+        // Show Templates function
+        async function showTemplates() {
+            const ext = windsurfCurrentFile ? windsurfCurrentFile.split('.').pop() : '';
+            const langMap = { 'py': 'python', 'html': 'html', 'css': 'css', 'js': 'javascript' };
+            const language = langMap[ext] || 'python';
+            
+            try {
+                const response = await fetch(`/api/admin/windsurf/templates?language=${language}`);
+                const data = await response.json();
+                
+                if (data.success && data.templates.length > 0) {
+                    let html = `<div style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">Available Templates for ${language}:</div>`;
+                    html += '<div style="display: flex; flex-direction: column; gap: 8px;">';
+                    data.templates.forEach(tpl => {
+                        html += `<button class="btn-sm" onclick="insertTemplate('${tpl}')" style="text-align: left;">${tpl}</button>`;
+                    });
+                    html += '</div>';
+                    
+                    // Show in analysis panel
+                    document.getElementById('analysisContent').innerHTML = html;
+                    document.getElementById('codeAnalysisPanel').style.display = 'block';
+                } else {
+                    alert('No templates available for this language');
+                }
+            } catch (e) {
+                console.error('Failed to load templates:', e);
+            }
+        }
+        
+        async function insertTemplate(templateName) {
+            // Generate code using AI with template hint
+            document.getElementById('aiPrompt').value = `Insert ${templateName} template`;
+            windsurfAIAssist();
         }
         
         // AI Assist functions
