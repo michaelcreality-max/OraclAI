@@ -720,96 +720,46 @@ def admin_git_log():
 
 @app.route('/api/admin/windsurf/ai-generate', methods=['POST'])
 def windsurf_ai_generate():
-    """Generate code changes using Windsurf AI / Gemini"""
+    """Generate code changes using self-contained Windsurf AI Engine (no external APIs)"""
     if not session.get('is_admin'):
         return jsonify({"error": "Admin access required"}), 403
     
     data = request.get_json() or {}
     prompt = data.get('prompt', '')
     target_file = data.get('target_file', '')
+    current_content = data.get('current_content', '')
     
     if not prompt:
         return jsonify({"error": "Prompt required"}), 400
     
     try:
-        # Try to use Gemini if available
-        try:
-            import google.generativeai as genai
-            api_key = os.environ.get('GEMINI_API_KEY')
-            if api_key:
-                genai.configure(api_key=api_key)
-                model = genai.GenerativeModel('gemini-pro')
-                
-                file_type = 'HTML' if target_file.endswith('.html') else 'Python' if target_file.endswith('.py') else 'CSS' if target_file.endswith('.css') else 'code'
-                
-                full_prompt = f"""You are a code generator for a trading platform admin dashboard.
-Generate {file_type} code based on this request: {prompt}
-
-Context:
-- Target file: {target_file}
-- This is for the OraclAI multi-agent trading system
-- Style should match a dark theme financial terminal
-
-Return ONLY the code, no explanations."""
-                
-                response = model.generate_content(full_prompt)
-                generated_code = response.text
-                
-                return jsonify({
-                    "success": True,
-                    "code": generated_code,
-                    "source": "gemini",
-                    "prompt": prompt,
-                    "target_file": target_file
-                })
-        except Exception as gemini_err:
-            pass  # Fall through to template-based generation
+        # Use the self-contained AI engine (NO external APIs needed!)
+        from windsurf_ai_engine import generate_code
         
-        # Template-based generation as fallback
-        file_type = target_file.split('.')[-1] if '.' in target_file else 'txt'
-        
-        templates = {
-            'html': f'''<!-- AI Generated: {prompt} -->
-<div class="ai-feature">
-    <h3 style="color: var(--accent-orange);">New Feature</h3>
-    <p>{prompt}</p>
-    <div class="feature-content">
-        <!-- Add your content here -->
-    </div>
-</div>''',
-            'py': f'''# AI Generated: {prompt}
-def new_feature():
-    """
-    {prompt}
-    """
-    # Implementation
-    pass
-
-# Add route or integration point here''',
-            'css': f'''/* AI Generated: {prompt} */
-.ai-feature {{
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 16px;
-    margin: 8px 0;
-}}'''
-        }
-        
-        generated_code = templates.get(file_type, f'# AI Generated code for: {prompt}\n# File type: {file_type}')
+        result = generate_code(
+            prompt=prompt,
+            file_path=target_file,
+            current_content=current_content
+        )
         
         return jsonify({
-            "success": True,
-            "code": generated_code,
-            "source": "template",
+            "success": result.get('success', True),
+            "code": result.get('code', ''),
+            "explanation": result.get('explanation', ''),
+            "source": "windsurf_ai_engine",
+            "language": result.get('language', 'unknown'),
+            "confidence": result.get('confidence', 0.5),
+            "suggestions": result.get('suggestions', []),
             "prompt": prompt,
             "target_file": target_file
         })
         
     except Exception as e:
+        log.error(f"AI generation error: {e}")
         return jsonify({
             "success": False,
-            "error": str(e)
+            "error": str(e),
+            "message": "AI generation failed. Please try again with a different prompt."
         }), 500
 
 @app.route('/api/admin/windsurf/apply', methods=['POST'])
