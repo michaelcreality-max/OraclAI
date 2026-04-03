@@ -30,6 +30,8 @@ from core.realistic_execution import RealisticTradeSimulator, realistic_simulato
 from core.system_mode_controller import SystemModeController, system_mode_controller
 from core.auth_system import AuthSystem, auth_system
 from core.api_key_system import APIKeyManager, initialize_api_key_manager, api_key_manager
+from services.pattern_recognition_service import PatternRecognitionService, pattern_service
+from services.media_analysis_service import MediaAnalysisService, media_service
 
 from core.data_structures import (
     MarketData, FeatureVector, ModelPrediction, TradingSignal, 
@@ -114,7 +116,13 @@ class AIPlatformOrchestrator:
         # API Key management system
         self.api_key_manager = initialize_api_key_manager(self.auth_system)
         
-        log.info("AI Platform Orchestrator initialized with API key system")
+        # Pattern recognition service
+        self.pattern_service = PatternRecognitionService()
+        
+        # Media & news analysis service
+        self.media_service = MediaAnalysisService()
+        
+        log.info("AI Platform Orchestrator initialized with pattern recognition and media analysis")
     
     def run_full_pipeline(self, symbol: str, days: int = 60) -> Dict:
         """
@@ -1011,6 +1019,128 @@ class AIPlatformOrchestrator:
         Call this during first-time setup
         """
         return self.auth_system.create_initial_admin(email, password)
+    
+    # ==================== PATTERN RECOGNITION API ====================
+    
+    def analyze_patterns(self, symbol: str, days: int = 60) -> Dict:
+        """
+        Analyze technical patterns for a symbol
+        
+        POST /api/analysis/patterns
+        
+        Returns:
+            {
+                'patterns': List[Detected patterns],
+                'support_resistance': List[S/R levels],
+                'trend': Trend analysis,
+                'volume_profile': Volume analysis,
+                'summary': Human-readable summary
+            }
+        """
+        try:
+            # Get market data
+            market_data = self.data_service.get_ohlcv(symbol, days=days)
+            if market_data is None or market_data.empty:
+                return {'error': f'No data available for {symbol}'}
+            
+            # Run pattern analysis
+            analysis = self.pattern_service.analyze(symbol, market_data)
+            
+            return {
+                'symbol': symbol,
+                'success': True,
+                'patterns': [
+                    {
+                        'type': p.pattern_type.value,
+                        'confidence': p.confidence,
+                        'price_target': p.price_target,
+                        'stop_loss': p.stop_loss,
+                        'description': p.description,
+                        'start_date': p.start_date.isoformat() if hasattr(p.start_date, 'isoformat') else str(p.start_date),
+                        'end_date': p.end_date.isoformat() if hasattr(p.end_date, 'isoformat') else str(p.end_date)
+                    }
+                    for p in analysis.get('patterns', [])
+                ],
+                'support_resistance': [
+                    {
+                        'level': s.level,
+                        'type': s.type,
+                        'strength': s.strength,
+                        'touches': s.touches,
+                        'is_active': s.is_active
+                    }
+                    for s in analysis.get('support_resistance', [])
+                ],
+                'trend': analysis.get('trend', {}),
+                'volume_profile': analysis.get('volume_profile', {}),
+                'summary': analysis.get('summary', 'No patterns detected')
+            }
+            
+        except Exception as e:
+            log.error(f"Pattern analysis failed for {symbol}: {e}")
+            return {'error': str(e), 'symbol': symbol}
+    
+    # ==================== MEDIA ANALYSIS API ====================
+    
+    def analyze_media_sentiment(self, symbol: str, articles: Optional[List[Dict]] = None) -> Dict:
+        """
+        Analyze media sentiment for a symbol
+        
+        POST /api/analysis/sentiment
+        
+        Args:
+            symbol: Stock symbol
+            articles: Optional list of article dicts with 'title', 'content', 'source', 'published_at'
+            
+        Returns:
+            {
+                'overall_sentiment': str,
+                'sentiment_score': float,
+                'confidence': float,
+                'article_count': int,
+                'bullish_count': int,
+                'bearish_count': int,
+                'key_topics': List[str],
+                'risk_indicators': List[str],
+                'opportunity_indicators': List[str],
+                'extreme_signals': Dict  # Contrarian signals at extremes
+            }
+        """
+        try:
+            # If no articles provided, return empty analysis
+            # In production, this would fetch from news APIs
+            analysis = self.media_service.analyze_sentiment(symbol, articles)
+            
+            # Get extreme signals
+            extremes = self.media_service.detect_sentiment_extremes(symbol)
+            
+            return {
+                'symbol': symbol,
+                'success': True,
+                'overall_sentiment': analysis.overall_sentiment,
+                'sentiment_score': analysis.sentiment_score,
+                'confidence': analysis.confidence,
+                'article_count': analysis.article_count,
+                'bullish_count': analysis.bullish_articles,
+                'bearish_count': analysis.bearish_articles,
+                'key_topics': analysis.key_topics,
+                'risk_indicators': analysis.risk_indicators,
+                'opportunity_indicators': analysis.opportunity_indicators,
+                'extreme_signals': extremes,
+                'last_updated': analysis.last_updated.isoformat()
+            }
+            
+        except Exception as e:
+            log.error(f"Media analysis failed for {symbol}: {e}")
+            return {'error': str(e), 'symbol': symbol}
+    
+    def get_sentiment_trend(self, symbol: str, days: int = 7) -> Dict:
+        """
+        Get sentiment trend over time
+        
+        GET /api/analysis/sentiment-trend
+        """
+        return self.media_service.get_sentiment_trend(symbol, days)
 
 
 # Global instance

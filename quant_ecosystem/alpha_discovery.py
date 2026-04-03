@@ -125,95 +125,132 @@ class GeneticFeatureSearch:
 
 class LLMHypothesisGenerator:
     """
-    Optional LLM hypotheses. Uses OPENAI_API_KEY + OPENAI_MODEL or HTTP
-    Ollama-style endpoint via LLM_HTTP_URL (POST JSON).
-    If unavailable, emits template-based unconventional ideas.
+    Local AI hypothesis generator using templates and algorithms.
+    Uses NO external APIs - completely self-contained.
     """
 
     def __init__(self, seed: Optional[int] = None):
         self._rng = random.Random(seed)
+        self._knowledge_base = self._load_knowledge_base()
+
+    def _load_knowledge_base(self) -> Dict[str, Any]:
+        """Load local knowledge base for hypothesis generation"""
+        return {
+            "momentum_factors": [
+                "Rank stocks by (momentum * inverse volatility) on rolling fear spikes from VIX proxy.",
+                "Use ratio of 5d return to 20d realized vol as a 'risk-adjusted thrust' signal.",
+                "Combine momentum_12m with momentum_1m for intermediate-term persistence.",
+            ],
+            "mean_reversion_factors": [
+                "Cross-asset: fade relative strength vs SPY when beta_proxy > 1.2 and RSI overbought.",
+                "Unconventional: sign(ret_1) * sign(rel_strength) * (1 - hl_range) as a contrarian chop filter.",
+                "Long-term reversal: stocks with worst 12m performance but recent 1m uptick.",
+            ],
+            "sentiment_factors": [
+                "Sentiment placeholder spike: combine sentiment_social with vol_z only on high volume days.",
+                "Analyst divergence: stocks with high dispersion in analyst target prices.",
+                "Insider activity: buying pressure from recent insider transactions.",
+            ],
+            "quality_factors": [
+                "Profitability stability: coefficient of variation of quarterly ROE.",
+                "Balance sheet strength: (cash - debt) / market cap for liquidity screening.",
+                "Earnings quality: accruals to cash flow ratio trend.",
+            ],
+            "technical_indicators": [
+                "Support/Resistance breakouts with volume confirmation above 150% average.",
+                "Bollinger Band squeeze: volatility contraction before expansion signals.",
+                "MACD histogram divergence from price for early trend reversal detection.",
+            ]
+        }
 
     def _templates(self, symbols_context: str) -> List[Dict[str, Any]]:
-        weird = [
-            "Rank stocks by (momentum * inverse volatility) on rolling fear spikes from VIX proxy.",
-            "Use ratio of 5d return to 20d realized vol as a 'risk-adjusted thrust' signal.",
-            "Cross-asset: fade relative strength vs SPY when beta_proxy > 1.2 and RSI overbought.",
-            "Sentiment placeholder spike: combine sentiment_social with vol_z only on high volume days.",
-            "Unconventional: sign(ret_1) * sign(rel_strength) * (1 - hl_range) as a contrarian chop filter.",
-        ]
-        pick = self._rng.sample(weird, k=min(3, len(weird)))
+        """Generate template-based unconventional ideas using local knowledge"""
+        # Combine all factor categories
+        all_factors = []
+        for category, factors in self._knowledge_base.items():
+            for factor in factors:
+                all_factors.append({"category": category, "description": factor})
+
+        # Randomly select 3-5 unique factors
+        selected = self._rng.sample(all_factors, k=min(self._rng.randint(3, 5), len(all_factors)))
+
         out = []
-        for p in pick:
+        for item in selected:
+            factor = item["description"]
+            category = item["category"]
+
+            # Generate feature hints based on category
+            hints = self._generate_feature_hints(category)
+
             out.append(
                 {
-                    "description": p + f" Context: {symbols_context}.",
-                    "feature_hints": ["ret_5", "vol_20", "rsi_14", "rel_strength", "vol_z"],
+                    "description": factor + f" Context: {symbols_context}.",
+                    "feature_hints": hints,
                     "unconventional": True,
+                    "category": category,
+                    "local_ai_generated": True
                 }
             )
         return out
 
-    def _openai(self, prompt: str) -> Optional[str]:
-        key = os.environ.get("OPENAI_API_KEY", "").strip()
-        if not key:
-            return None
-        model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
-        body = json.dumps(
-            {
-                "model": model,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.9,
-            }
-        ).encode()
-        req = urllib.request.Request(
-            "https://api.openai.com/v1/chat/completions",
-            data=body,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {key}",
-            },
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            raw = json.loads(resp.read().decode())
-        return raw["choices"][0]["message"]["content"]
+    def _generate_feature_hints(self, category: str) -> List[str]:
+        """Generate appropriate feature hints based on factor category"""
+        hint_map = {
+            "momentum_factors": ["ret_5", "ret_20", "ret_60", "volatility_20", "momentum_12m"],
+            "mean_reversion_factors": ["rel_strength", "rsi_14", "beta_proxy", "hl_range", "ret_1"],
+            "sentiment_factors": ["sentiment_social", "vol_z", "volume_20", "analyst_dispersion"],
+            "quality_factors": ["roe_cv", "cash_debt_ratio", "accruals_cfo", "earnings_quality"],
+            "technical_indicators": ["volume_ratio", "bb_squeeze", "macd_hist", "price_20"]
+        }
+        return hint_map.get(category, ["ret_5", "vol_20", "volume"])
 
-    def _http_llm(self, prompt: str) -> Optional[str]:
-        url = os.environ.get("LLM_HTTP_URL", "").strip()
-        if not url:
-            return None
-        body = json.dumps({"prompt": prompt}).encode()
-        req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            return resp.read().decode(errors="replace")
+    def _generate_composite_idea(self, context: str) -> Dict[str, Any]:
+        """Generate a composite hypothesis combining multiple factors"""
+        # Select 2 random categories to combine
+        categories = list(self._knowledge_base.keys())
+        cat1, cat2 = self._rng.sample(categories, k=2)
+
+        factor1 = self._rng.choice(self._knowledge_base[cat1])
+        factor2 = self._rng.choice(self._knowledge_base[cat2])
+
+        return {
+            "description": f"Composite: {factor1} AND {factor2} Context: {context}.",
+            "feature_hints": self._generate_feature_hints(cat1) + self._generate_feature_hints(cat2),
+            "unconventional": True,
+            "category": "composite",
+            "local_ai_generated": True
+        }
 
     def generate_raw_ideas(self, context: str) -> List[Dict[str, Any]]:
-        prompt = (
-            "You are a creative quant researcher. Propose 3 unconventional alpha ideas "
-            "using technical, sentiment placeholders, and cross-asset features. "
-            "Return JSON array of objects with keys: description, feature_hints (list of strings), "
-            "unconventional (bool). Be creative, not conservative.\n\n"
-            f"Context: {context}"
-        )
-        text = None
-        try:
-            text = self._openai(prompt)
-        except Exception:
-            text = None
-        if text is None:
-            try:
-                text = self._http_llm(prompt)
-            except Exception:
-                text = None
-        if text:
-            try:
-                start = text.find("[")
-                end = text.rfind("]") + 1
-                if start >= 0 and end > start:
-                    return json.loads(text[start:end])
-            except Exception:
-                pass
-        return self._templates(context)
+        """
+        Generate alpha ideas using local AI - NO external API calls.
+        Uses knowledge base and algorithmic generation.
+        """
+        # Get template-based ideas
+        ideas = self._templates(context)
+
+        # Add a composite idea
+        ideas.append(self._generate_composite_idea(context))
+
+        # Add a personalized variation based on context keywords
+        if "tech" in context.lower() or "growth" in context.lower():
+            ideas.append({
+                "description": f"Tech-specific: High beta momentum during earnings season. Context: {context}.",
+                "feature_hints": ["beta", "momentum_3m", "earnings_date", "implied_vol"],
+                "unconventional": True,
+                "category": "sector_specific",
+                "local_ai_generated": True
+            })
+        elif "value" in context.lower() or "dividend" in context.lower():
+            ideas.append({
+                "description": f"Value play: Book-to-market with earnings stability. Context: {context}.",
+                "feature_hints": ["book_to_market", "earnings_stability", "dividend_yield", "roe"],
+                "unconventional": True,
+                "category": "sector_specific",
+                "local_ai_generated": True
+            })
+
+        return ideas
 
     def to_hypotheses(self, raw: List[Dict[str, Any]], available_columns: Sequence[str]) -> List[AlphaHypothesis]:
         avail = set(available_columns)

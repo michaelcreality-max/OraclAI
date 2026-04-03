@@ -1765,7 +1765,3305 @@ def get_stock_info(symbol):
             "error": str(e)
         }), 500
 
+# Admin System and Website Builder API Routes
+from admin_system import admin_controller
+from website_builder_ai import website_builder_ai
+from preview_server import preview_server
+
+@app.route('/admin-dashboard')
+def admin_dashboard_new():
+    """Serve the new admin dashboard with website builder"""
+    return render_template('admin_dashboard.html')
+
+# Admin Authentication API
+@app.route('/api/admin/login', methods=['POST'])
+def admin_login():
+    """Admin login with MK1/123456"""
+    data = request.get_json() or {}
+    username = data.get('username', '')
+    password = data.get('password', '')
+    
+    result = admin_controller.login(username, password)
+    
+    if result['success']:
+        # Set Flask session
+        session['admin_session'] = result['session_id']
+        session['is_admin'] = True
+        session['username'] = username
+    
+    return jsonify(result)
+
+@app.route('/api/admin/logout', methods=['POST'])
+def admin_logout():
+    """Admin logout"""
+    data = request.get_json() or {}
+    session_id = data.get('session_id') or session.get('admin_session')
+    
+    if session_id:
+        admin_controller.logout(session_id)
+    
+    session.clear()
+    return jsonify({'success': True})
+
+@app.route('/api/admin/features', methods=['GET'])
+def admin_get_features():
+    """Get all feature statuses"""
+    features = admin_controller.features.get_all_features()
+    return jsonify({'success': True, 'features': features})
+
+@app.route('/api/admin/feature/release', methods=['POST'])
+def admin_release_feature():
+    """Release or unreleased a feature (admin only)"""
+    data = request.get_json() or {}
+    session_id = data.get('session_id') or session.get('admin_session')
+    feature_name = data.get('feature_name', '')
+    release = data.get('release', True)
+    
+    if release:
+        result = admin_controller.features.release_feature(feature_name, session_id)
+    else:
+        result = admin_controller.features.unreleased_feature(feature_name, session_id)
+    
+    return jsonify(result)
+
+# Website Builder API
+@app.route('/api/website/build', methods=['POST'])
+def website_build():
+    """Build website using AI (admin only until released)"""
+    data = request.get_json() or {}
+    session_id = data.get('session_id') or session.get('admin_session')
+    description = data.get('description', '')
+    
+    # Check access
+    access = admin_controller.check_access(session_id, 'website_builder')
+    if not access['has_access']:
+        return jsonify({'success': False, 'error': 'Access denied'}), 403
+    
+    try:
+        # Build website using AI
+        result = website_builder_ai.build_website(description)
+        
+        if result.get('success'):
+            # Create preview
+            preview = preview_server.create_preview(
+                result['website_code'],
+                result['project_id']
+            )
+            
+            return jsonify({
+                'success': True,
+                'project_id': result['project_id'],
+                'thinking_process': result['thinking_process'],
+                'preview_url': preview['preview_url'],
+                'custom_url': preview['custom_url']
+            })
+        else:
+            return jsonify({'success': False, 'error': result.get('error', 'Build failed')})
+    
+    except Exception as e:
+        log.error(f"Website build error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/preview/<preview_id>')
+def website_preview(preview_id):
+    """View generated website preview"""
+    html = preview_server.get_preview_html(preview_id)
+    
+    if html:
+        return html
+    else:
+        return "Preview not found or expired", 404
+
+# ==================== LATEX MATH RENDERING API ====================
+
+@app.route('/api/v1/latex/render', methods=['POST'])
+def render_latex():
+    """Render LaTeX math expression to HTML"""
+    data = request.get_json() or {}
+    latex = data.get('latex', '')
+    display_mode = data.get('display_mode', False)
+    
+    if not latex:
+        return jsonify({"error": "LaTeX expression required"}), 400
+    
+    try:
+        from multi_domain.latex_renderer import latex_renderer
+        result = latex_renderer.render(latex, display_mode)
+        
+        return jsonify({
+            "success": True,
+            "html": result.html,
+            "accessible_text": result.accessible_text,
+            "mode": result.mode.value,
+            "css_styles": latex_renderer.get_css_styles()
+        })
+    except Exception as e:
+        log.error(f"LaTeX render error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/latex/render-document', methods=['POST'])
+def render_latex_document():
+    """Render all math expressions in a document"""
+    data = request.get_json() or {}
+    document = data.get('document', '')
+    
+    if not document:
+        return jsonify({"error": "Document content required"}), 400
+    
+    try:
+        from multi_domain.latex_renderer import latex_renderer
+        rendered = latex_renderer.render_document(document)
+        
+        return jsonify({
+            "success": True,
+            "rendered_document": rendered,
+            "css_styles": latex_renderer.get_css_styles()
+        })
+    except Exception as e:
+        log.error(f"Document render error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/latex/styles', methods=['GET'])
+def get_latex_styles():
+    """Get CSS styles for LaTeX rendering"""
+    try:
+        from multi_domain.latex_renderer import latex_renderer
+        return jsonify({
+            "success": True,
+            "css": latex_renderer.get_css_styles()
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ==================== WEBSITE BUILDER API ====================
+
+@app.route('/api/v1/website/build', methods=['POST'])
+def build_website():
+    """
+    Build a website using multi-agent parallel collaboration
+    
+    Request body:
+    {
+        "title": "Website Title",
+        "description": "Site description",
+        "layout": "landing|dashboard|standard",
+        "theme": "modern|dark|minimal",
+        "colors": {"primary": "#3b82f6", ...},
+        "sections": [...],
+        "features": ["forms", "animations", ...],
+        "max_agents": 5
+    }
+    """
+    data = request.get_json() or {}
+    
+    if not data.get('title'):
+        return jsonify({"error": "Website title required"}), 400
+    
+    try:
+        from website_builder.multi_agent_website_builder import MultiAgentWebsiteBuilder
+        
+        # Create builder with specified agent count (max 5)
+        max_agents = min(data.get('max_agents', 5), 5)
+        builder = MultiAgentWebsiteBuilder(max_agents=max_agents)
+        
+        # Build website
+        result = builder.build_website(data)
+        
+        return jsonify({
+            "success": True,
+            "project_id": result.project_id,
+            "build_time": result.build_time,
+            "quality_score": result.quality_score,
+            "agent_contributions": result.agent_contributions,
+            "issues": result.issues,
+            "files": {
+                "index.html": result.html,
+                "styles.css": result.css,
+                "scripts.js": result.js
+            },
+            "stats": {
+                "html_size": len(result.html),
+                "css_size": len(result.css),
+                "js_size": len(result.js),
+                "total_size": len(result.html) + len(result.css) + len(result.js)
+            }
+        })
+    except Exception as e:
+        log.error(f"Website build error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/website/agents', methods=['GET'])
+def get_website_builder_agents():
+    """Get available website builder agent roles"""
+    return jsonify({
+        "success": True,
+        "max_agents": 5,
+        "roles": [
+            {"id": "structure", "name": "Structure Agent", "description": "HTML layout and semantic structure"},
+            {"id": "styling", "name": "Styling Agent", "description": "CSS, responsive design, animations"},
+            {"id": "interactivity", "name": "Interactivity Agent", "description": "JavaScript and event handling"},
+            {"id": "content", "name": "Content Agent", "description": "Copy, images, and SEO content"},
+            {"id": "optimization", "name": "Optimization Agent", "description": "Performance and accessibility"}
+        ],
+        "features": [
+            "Parallel agent execution",
+            "Automatic dependency resolution",
+            "Quality scoring",
+            "Multi-theme support",
+            "Responsive design",
+            "Accessibility built-in"
+        ]
+    })
+
+@app.route('/api/v1/website/preview/<project_id>', methods=['GET'])
+def preview_website(project_id):
+    """Get preview of built website"""
+    try:
+        from website_builder.multi_agent_website_builder import website_builder
+        
+        # Find build in history
+        for build in website_builder.build_history:
+            if build.project_id == project_id:
+                return jsonify({
+                    "success": True,
+                    "project_id": project_id,
+                    "html": build.html,
+                    "css": build.css,
+                    "js": build.js,
+                    "quality_score": build.quality_score,
+                    "build_time": build.build_time,
+                    "timestamp": build.timestamp.isoformat()
+                })
+        
+        return jsonify({"error": "Project not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/website/demo', methods=['GET'])
+def demo_website_builder():
+    """Run demo website build"""
+    try:
+        from website_builder.multi_agent_website_builder import demo_website_build
+        result = demo_website_build()
+        
+        return jsonify({
+            "success": True,
+            "demo_complete": True,
+            "project_id": result.project_id,
+            "build_time": result.build_time,
+            "quality_score": result.quality_score
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ==================== AUTONOMOUS WEBSITE BUILDER API (ADMIN ONLY) ====================
+
+@app.route('/admin/base44-builder')
+def admin_base44_builder_page():
+    """Admin page for Base44/Replit Competitor"""
+    if not session.get('is_admin'):
+        return redirect('/admin/login')
+    return render_template('admin_base44_builder.html')
+
+@app.route('/admin/visualization')
+def admin_visualization_dashboard():
+    """Admin page for AI Visualization Dashboard"""
+    if not session.get('is_admin'):
+        return redirect('/admin/login')
+    return render_template('visualization_dashboard.html')
+
+@app.route('/admin/autonomous-builder')
+def admin_autonomous_builder_page():
+    """Admin page for autonomous website builder"""
+    if not session.get('is_admin'):
+        return redirect('/admin/login')
+    return render_template('admin_autonomous_builder.html')
+
+@app.route('/admin/unified-builder')
+def admin_unified_builder_page():
+    """Admin page for UNIFIED AI Builder (Windsurf Replacement)"""
+    if not session.get('is_admin'):
+        return redirect('/admin/login')
+    return render_template('admin_unified_builder.html')
+
+@app.route('/api/admin/autonomous-build', methods=['POST'])
+def admin_autonomous_build():
+    """
+    Autonomous website build endpoint (Admin only)
+    Self-contained AI - no external APIs
+    Breaks down big tasks, error-free with self-correction
+    """
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    data = request.get_json() or {}
+    
+    # Validate required fields
+    name = data.get('name', 'Untitled Website')
+    description = data.get('description', '')
+    features = data.get('features', ['animations', 'interactivity'])
+    pages = data.get('pages', ['index'])
+    style_guide = data.get('style_guide', {})
+    
+    try:
+        from website_builder.autonomous_website_builder import autonomous_builder
+        
+        # Start autonomous build
+        result = autonomous_builder.build_website(
+            name=name,
+            description=description,
+            features=features,
+            pages=pages,
+            style_guide=style_guide
+        )
+        
+        return jsonify({
+            "success": result.success,
+            "project_id": result.project_id,
+            "build_time": result.build_time,
+            "tasks_completed": result.tasks_completed,
+            "tasks_failed": result.tasks_failed,
+            "corrections_made": result.corrections_made,
+            "validation_score": result.validation_score,
+            "files": result.files,
+            "errors": result.errors,
+            "logs": result.logs,
+            "preview_url": result.preview_url
+        })
+        
+    except Exception as e:
+        log.error(f"Autonomous build error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/powerful-build', methods=['POST'])
+def admin_powerful_build():
+    """
+    POWERFUL Autonomous website build endpoint (Admin only)
+    Ultimate AI with 100+ components, AI layout optimization, SEO, Performance, WCAG validation
+    Self-contained AI - no external APIs
+    """
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    data = request.get_json() or {}
+    
+    # Validate required fields
+    name = data.get('name', 'Untitled Website')
+    description = data.get('description', '')
+    website_type = data.get('website_type', 'landing')
+    features = data.get('features', ['animations', 'responsive', 'seo'])
+    pages = data.get('pages', ['index'])
+    style_guide = data.get('style_guide', {})
+    target_audience = data.get('target_audience', 'general')
+    industry = data.get('industry', 'technology')
+    
+    try:
+        from website_builder.powerful_builder import powerful_builder
+        
+        # Start powerful build
+        result = powerful_builder.build_website(
+            name=name,
+            description=description,
+            website_type=website_type,
+            features=features,
+            pages=pages,
+            style_guide=style_guide,
+            target_audience=target_audience,
+            industry=industry
+        )
+        
+        return jsonify({
+            "success": result.success,
+            "project_id": result.project_id,
+            "build_time": result.build_time,
+            "tasks_completed": result.tasks_completed,
+            "tasks_failed": result.tasks_failed,
+            "tasks_optimized": result.tasks_optimized,
+            "corrections_made": result.corrections_made,
+            "validation_score": result.validation_score,
+            "wcag_score": result.wcag_score,
+            "performance_score": result.performance_score,
+            "seo_score": result.seo_score,
+            "files": result.files,
+            "components_used": result.components_used,
+            "errors": result.errors,
+            "logs": result.logs,
+            "preview_url": result.preview_url
+        })
+        
+    except Exception as e:
+        log.error(f"Powerful build error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# ==================== UNIFIED AI BUILDER API (Replaces Windsurf) ====================
+
+@app.route('/api/admin/unified/think', methods=['POST'])
+def unified_thinking_process():
+    """
+    Get AI thinking process for any operation
+    Replaces Windsurf AI assistant with visible reasoning
+    """
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    data = request.get_json() or {}
+    request_type = data.get('request_type', 'analyze')
+    params = data.get('params', {})
+    
+    try:
+        from website_builder.unified_ai_builder import unified_builder
+        
+        # Process and get thinking
+        result = unified_builder.process_request(request_type, params)
+        
+        return jsonify({
+            "success": True,
+            "thinking_process": result.get('thinking_process', []),
+            "processing_time": result.get('processing_time', 0),
+            "request_type": request_type
+        })
+        
+    except Exception as e:
+        log.error(f"Unified thinking error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/unified/analyze-code', methods=['POST'])
+def unified_analyze_code():
+    """
+    Analyze code with AI (replaces Windsurf code analysis)
+    """
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    data = request.get_json() or {}
+    code = data.get('code', '')
+    language = data.get('language', 'python')
+    
+    if not code:
+        return jsonify({"error": "Code is required"}), 400
+    
+    try:
+        from website_builder.unified_ai_builder import unified_builder
+        
+        result = unified_builder.process_request('analyze_code', {
+            'code': code,
+            'language': language
+        })
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        log.error(f"Code analysis error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/unified/refactor', methods=['POST'])
+def unified_refactor_code():
+    """
+    Refactor code with AI (replaces Windsurf refactoring)
+    """
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    data = request.get_json() or {}
+    code = data.get('code', '')
+    language = data.get('language', 'python')
+    refactor_type = data.get('refactor_type', 'auto')
+    
+    if not code:
+        return jsonify({"error": "Code is required"}), 400
+    
+    try:
+        from website_builder.unified_ai_builder import unified_builder
+        
+        result = unified_builder.process_request('refactor_code', {
+            'code': code,
+            'language': language,
+            'refactor_type': refactor_type
+        })
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        log.error(f"Refactoring error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/unified/completions', methods=['POST'])
+def unified_code_completions():
+    """
+    Get smart code completions (replaces Windsurf completions)
+    """
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    data = request.get_json() or {}
+    code = data.get('code', '')
+    cursor_position = data.get('cursor_position', len(code))
+    language = data.get('language', 'python')
+    
+    try:
+        from website_builder.unified_ai_builder import unified_builder
+        
+        result = unified_builder.process_request('get_completions', {
+            'code': code,
+            'cursor_position': cursor_position,
+            'language': language
+        })
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        log.error(f"Completions error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/unified/generate-component', methods=['POST'])
+def unified_generate_component():
+    """
+    Generate custom component with AI
+    """
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    data = request.get_json() or {}
+    component_type = data.get('component_type', 'div')
+    styles = data.get('styles', {})
+    features = data.get('features', [])
+    
+    try:
+        from website_builder.unified_ai_builder import unified_builder
+        
+        result = unified_builder.process_request('generate_component', {
+            'component_type': component_type,
+            'styles': styles,
+            'features': features
+        })
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        log.error(f"Component generation error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/unified/build', methods=['POST'])
+def unified_full_build():
+    """
+    Full unified build - website + code intelligence
+    """
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    data = request.get_json() or {}
+    
+    try:
+        from website_builder.unified_ai_builder import unified_builder
+        
+        result = unified_builder.process_request('build_website', {
+            'name': data.get('name', 'Website'),
+            'description': data.get('description', ''),
+            'website_type': data.get('website_type', 'landing'),
+            'features': data.get('features', []),
+            'pages': data.get('pages', ['index']),
+            'style_guide': data.get('style_guide', {})
+        })
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        log.error(f"Unified build error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/unified/demo', methods=['GET'])
+def unified_demo():
+    """Run unified builder demo"""
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    try:
+        from website_builder.unified_ai_builder import demo_unified_builder
+        demo_unified_builder()
+        
+        return jsonify({
+            "success": True,
+            "message": "Demo complete - check server logs"
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/autonomous-modify', methods=['POST'])
+def admin_autonomous_modify():
+    """
+    Real-time modification of generated website (Admin only)
+    """
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    data = request.get_json() or {}
+    project_id = data.get('project_id')
+    filename = data.get('filename')
+    content = data.get('content')
+    
+    if not all([project_id, filename, content]):
+        return jsonify({"error": "project_id, filename, and content required"}), 400
+    
+    try:
+        from website_builder.autonomous_website_builder import autonomous_builder
+        
+        result = autonomous_builder.modify_realtime(
+            project_id=project_id,
+            component=filename,
+            changes={"content": content}
+        )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        log.error(f"Realtime modification error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/autonomous-history', methods=['GET'])
+def admin_autonomous_history():
+    """Get build history for autonomous builder (Admin only)"""
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    try:
+        from website_builder.autonomous_website_builder import autonomous_builder
+        
+        history = autonomous_builder.get_build_history()
+        
+        return jsonify({
+            "success": True,
+            "history": [
+                {
+                    "project_id": h.project_id,
+                    "name": h.project_id,  # Could store name separately
+                    "success": h.success,
+                    "build_time": h.build_time,
+                    "validation_score": h.validation_score,
+                    "files": list(h.files.keys()),
+                    "timestamp": datetime.now().isoformat()  # Would be stored in real implementation
+                }
+                for h in history[-20:]  # Last 20 builds
+            ]
+        })
+        
+    except Exception as e:
+        log.error(f"History error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/autonomous-preview/<project_id>', methods=['GET'])
+def admin_autonomous_preview(project_id):
+    """Get preview of autonomously built website"""
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    try:
+        from website_builder.autonomous_website_builder import autonomous_builder
+        
+        for build in autonomous_builder.build_history:
+            if build.project_id == project_id:
+                return jsonify({
+                    "success": True,
+                    "project_id": project_id,
+                    "files": build.files,
+                    "html": build.files.get('index.html', ''),
+                    "css": build.files.get('styles.css', ''),
+                    "js": build.files.get('scripts.js', '')
+                })
+        
+        return jsonify({"error": "Project not found"}), 404
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/autonomous-demo', methods=['GET'])
+def admin_autonomous_demo():
+    """Run demo autonomous build"""
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    try:
+        from website_builder.autonomous_website_builder import demo_autonomous_build
+        result = demo_autonomous_build()
+        
+        return jsonify({
+            "success": True,
+            "demo_complete": True,
+            "project_id": result.project_id,
+            "build_time": result.build_time,
+            "validation_score": result.validation_score,
+            "files": list(result.files.keys())
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ==================== AI TRAINING DASHBOARD API ====================
+
+@app.route('/api/v1/training/dashboard', methods=['GET'])
+def get_training_dashboard_api():
+    """Get comprehensive training dashboard data"""
+    try:
+        from ai_training_framework import get_training_dashboard
+        return jsonify(get_training_dashboard())
+    except Exception as e:
+        log.error(f"Training dashboard error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/training/agent/<agent_name>', methods=['GET'])
+def get_agent_training_details(agent_name):
+    """Get training details for a specific agent"""
+    try:
+        from ai_training_framework import training_engine, specialization_trainer
+        
+        performance = training_engine.get_agent_improvements(agent_name)
+        specializations = specialization_trainer.identify_specializations(agent_name)
+        training_plan = specialization_trainer.generate_training_plan(agent_name)
+        
+        return jsonify({
+            "success": True,
+            "agent_name": agent_name,
+            "performance": performance,
+            "specializations": specializations,
+            "training_plan": training_plan
+        })
+    except Exception as e:
+        log.error(f"Agent training details error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/training/feedback', methods=['POST'])
+def submit_training_feedback():
+    """Submit feedback for a completed debate session"""
+    data = request.get_json() or {}
+    session_id = data.get('session_id')
+    domain = data.get('domain')
+    user_rating = data.get('rating')
+    feedback_text = data.get('feedback_text', '')
+    
+    if not all([session_id, domain, user_rating]):
+        return jsonify({"error": "session_id, domain, and rating required"}), 400
+    
+    try:
+        # Route to appropriate domain system
+        domain_map = {
+            'finance': 'multi_domain.finance_system',
+            'code': 'multi_domain.code_system',
+            'stem': 'multi_domain.stem_system',
+            'literature': 'multi_domain.literature_system',
+            'writing': 'multi_domain.writing_system',
+            'general': 'multi_domain.general_system',
+            'website': 'website_builder_ai'
+        }
+        
+        if domain in domain_map:
+            module_path = domain_map[domain]
+            module = __import__(module_path, fromlist=['*'])
+            
+            # Find the AI instance
+            ai_instance = None
+            for attr_name in dir(module):
+                attr = getattr(module, attr_name)
+                if hasattr(attr, 'submit_feedback'):
+                    ai_instance = attr
+                    break
+            
+            if ai_instance:
+                result = ai_instance.submit_feedback(session_id, user_rating, feedback_text)
+                return jsonify(result)
+        
+        return jsonify({"error": "Domain not found or feedback not supported"}), 404
+        
+    except Exception as e:
+        log.error(f"Feedback submission error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/training/stats', methods=['GET'])
+def get_training_statistics():
+    """Get overall training statistics"""
+    try:
+        from ai_training_framework import training_engine
+        stats = training_engine.get_training_statistics()
+        return jsonify({
+            "success": True,
+            "statistics": stats
+        })
+    except Exception as e:
+        log.error(f"Training stats error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/training/reset', methods=['POST'])
+def reset_training_data():
+    """Reset training data (admin only)"""
+    if not session.get('is_admin'):
+        return jsonify({"error": "Admin access required"}), 403
+    
+    try:
+        import sqlite3
+        conn = sqlite3.connect('ai_training.db')
+        cursor = conn.cursor()
+        
+        # Clear tables but keep structure
+        cursor.execute("DELETE FROM feedback")
+        cursor.execute("DELETE FROM training_sessions")
+        cursor.execute("DELETE FROM agent_performance")
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "message": "Training data reset successfully"
+        })
+    except Exception as e:
+        log.error(f"Training reset error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# ==================== ADVANCED AI IMPROVEMENTS API ====================
+
+@app.route('/api/v1/advanced/dashboard', methods=['GET'])
+def get_advanced_dashboard():
+    """Get advanced AI improvements dashboard"""
+    try:
+        from ai_advanced_improvements import get_advanced_ai_dashboard
+        return jsonify(get_advanced_ai_dashboard())
+    except Exception as e:
+        log.error(f"Advanced dashboard error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/advanced/consensus', methods=['POST'])
+def run_advanced_consensus():
+    """Run advanced ensemble voting"""
+    data = request.get_json() or {}
+    positions = data.get('positions', [])
+    strategy = data.get('strategy', 'confidence_weighted')
+    
+    try:
+        from ai_advanced_improvements import ensemble_voting
+        
+        # Convert dict positions to objects
+        class Pos:
+            def __init__(self, d):
+                self.agent_name = d.get('agent')
+                self.stance = d.get('stance')
+                self.confidence = d.get('confidence', 0.5)
+                self.reasoning = d.get('reasoning', '')
+        
+        pos_objects = [Pos(p) for p in positions]
+        result = ensemble_voting.vote(pos_objects, strategy)
+        
+        return jsonify({
+            "success": True,
+            "consensus": result
+        })
+    except Exception as e:
+        log.error(f"Advanced consensus error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/advanced/adversarial', methods=['POST'])
+def run_adversarial_debate():
+    """Run adversarial training debate"""
+    data = request.get_json() or {}
+    domain = data.get('domain')
+    query = data.get('query')
+    rounds = data.get('rounds', 3)
+    
+    if not all([domain, query]):
+        return jsonify({"error": "domain and query required"}), 400
+    
+    try:
+        # Get domain system
+        domain_map = {
+            'finance': 'multi_domain.finance_system',
+            'code': 'multi_domain.code_system',
+            'stem': 'multi_domain.stem_system',
+            'literature': 'multi_domain.literature_system',
+            'writing': 'multi_domain.writing_system',
+            'general': 'multi_domain.general_system'
+        }
+        
+        if domain not in domain_map:
+            return jsonify({"error": "Invalid domain"}), 400
+        
+        module = __import__(domain_map[domain], fromlist=['*'])
+        
+        # Find AI instance
+        ai_instance = None
+        for attr_name in dir(module):
+            attr = getattr(module, attr_name)
+            if hasattr(attr, 'run_adversarial_debate'):
+                ai_instance = attr
+                break
+        
+        if not ai_instance:
+            return jsonify({"error": "Domain AI not found"}), 404
+        
+        result = ai_instance.run_adversarial_debate(query, rounds)
+        return jsonify(result)
+        
+    except Exception as e:
+        log.error(f"Adversarial debate error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/advanced/metrics', methods=['GET'])
+def get_realtime_metrics():
+    """Get real-time performance metrics"""
+    domain = request.args.get('domain')
+    
+    try:
+        if domain:
+            domain_map = {
+                'finance': 'multi_domain.finance_system',
+                'code': 'multi_domain.code_system',
+                'stem': 'multi_domain.stem_system',
+                'literature': 'multi_domain.literature_system',
+                'writing': 'multi_domain.writing_system',
+                'general': 'multi_domain.general_system'
+            }
+            
+            if domain in domain_map:
+                module = __import__(domain_map[domain], fromlist=['*'])
+                
+                for attr_name in dir(module):
+                    attr = getattr(module, attr_name)
+                    if hasattr(attr, 'get_realtime_metrics'):
+                        metrics = attr.get_realtime_metrics()
+                        return jsonify({
+                            "success": True,
+                            "domain": domain,
+                            "metrics": metrics
+                        })
+        
+        # Return overall metrics
+        from ai_advanced_improvements import performance_monitor
+        return jsonify({
+            "success": True,
+            "metrics": performance_monitor.get_dashboard()
+        })
+        
+    except Exception as e:
+        log.error(f"Metrics error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/advanced/cross-domain', methods=['GET'])
+def get_cross_domain_opportunities():
+    """Get cross-domain knowledge transfer opportunities"""
+    source = request.args.get('source')
+    target = request.args.get('target')
+    
+    try:
+        from ai_advanced_improvements import cross_domain_transfer
+        
+        if source and target:
+            opportunities = cross_domain_transfer.find_transfer_opportunities(source, target)
+            return jsonify({
+                "success": True,
+                "source": source,
+                "target": target,
+                "opportunities": opportunities
+            })
+        else:
+            stats = cross_domain_transfer.get_transfer_statistics()
+            return jsonify({
+                "success": True,
+                "statistics": stats
+            })
+    except Exception as e:
+        log.error(f"Cross-domain error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/advanced/critique', methods=['POST'])
+def generate_adversarial_critique():
+    """Generate adversarial critique for a position"""
+    data = request.get_json() or {}
+    position = data.get('position')
+    all_positions = data.get('all_positions', [])
+    
+    if not position:
+        return jsonify({"error": "position required"}), 400
+    
+    try:
+        from ai_advanced_improvements import adversarial_training
+        
+        class Pos:
+            def __init__(self, d):
+                self.agent_name = d.get('agent')
+                self.stance = d.get('stance')
+                self.confidence = d.get('confidence', 0.5)
+                self.reasoning = d.get('reasoning', '')
+                self.key_points = d.get('key_points', [])
+                self.metadata = d.get('metadata', {})
+        
+        pos_obj = Pos(position)
+        all_pos_objs = [Pos(p) for p in all_positions]
+        
+        critique = adversarial_training.generate_adversarial_critique(pos_obj, all_pos_objs)
+        
+        return jsonify({
+            "success": True,
+            "critique": critique,
+            "weaknesses_found": len(critique.split('|')) if '|' in critique else 0
+        })
+    except Exception as e:
+        log.error(f"Critique error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# ==================== STATE-OF-THE-ART AI API ====================
+
+@app.route('/api/v1/sota/dashboard', methods=['GET'])
+def get_sota_dashboard():
+    """Get state-of-the-art AI dashboard"""
+    try:
+        from ai_state_of_the_art import get_state_of_the_art_dashboard
+        return jsonify(get_state_of_the_art_dashboard())
+    except Exception as e:
+        log.error(f"SOTA dashboard error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/sota/rl/train', methods=['POST'])
+def rl_train_agent():
+    """Train RL agent with experience"""
+    data = request.get_json() or {}
+    agent_name = data.get('agent_name')
+    user_rating = data.get('rating')
+    query = data.get('query', '')
+    consensus_reached = data.get('consensus_reached', False)
+    response_time = data.get('response_time', 1.0)
+    
+    if not agent_name or user_rating is None:
+        return jsonify({"error": "agent_name and rating required"}), 400
+    
+    try:
+        from ai_state_of_the_art import create_rl_agent, RLExperience
+        
+        rl_agent = create_rl_agent(agent_name)
+        
+        # Create experience
+        state = rl_agent.extract_features(query, {})
+        action = rl_agent.select_action(state)
+        reward = rl_agent.calculate_reward(user_rating, consensus_reached, response_time)
+        
+        experience = RLExperience(
+            state=state,
+            action=action,
+            reward=reward,
+            next_state=None,
+            done=True
+        )
+        
+        rl_agent.store_experience(experience)
+        rl_agent.learn(batch_size=1)
+        
+        return jsonify({
+            "success": True,
+            "agent": agent_name,
+            "reward": reward,
+            "epsilon": rl_agent.epsilon,
+            "experiences": len(rl_agent.experience_buffer)
+        })
+    except Exception as e:
+        log.error(f"RL training error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/sota/rl/stats/<agent_name>', methods=['GET'])
+def get_rl_stats(agent_name):
+    """Get RL statistics for agent"""
+    try:
+        from ai_state_of_the_art import rl_agents
+        
+        if agent_name in rl_agents:
+            return jsonify({
+                "success": True,
+                "stats": rl_agents[agent_name].get_rl_stats()
+            })
+        else:
+            return jsonify({"error": "Agent not found"}), 404
+    except Exception as e:
+        log.error(f"RL stats error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/sota/meta/config', methods=['POST'])
+def get_meta_config():
+    """Get meta-learning optimal config"""
+    data = request.get_json() or {}
+    domain = data.get('domain', 'general')
+    query = data.get('query', '')
+    
+    try:
+        from ai_state_of_the_art import meta_learning
+        
+        complexity = meta_learning.calculate_query_complexity(query)
+        config = meta_learning.get_optimal_config(domain, complexity)
+        
+        return jsonify({
+            "success": True,
+            "domain": domain,
+            "query_complexity": round(complexity, 3),
+            "optimal_config": config
+        })
+    except Exception as e:
+        log.error(f"Meta config error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/sota/graph/analogies', methods=['GET'])
+def get_knowledge_analogies():
+    """Get analogies from knowledge graph"""
+    concept = request.args.get('concept')
+    target_domain = request.args.get('target_domain')
+    
+    if not concept or not target_domain:
+        return jsonify({"error": "concept and target_domain required"}), 400
+    
+    try:
+        from ai_state_of_the_art import knowledge_graph
+        
+        analogies = knowledge_graph.find_analogies(concept, target_domain)
+        
+        return jsonify({
+            "success": True,
+            "concept": concept,
+            "target_domain": target_domain,
+            "analogies_found": len(analogies),
+            "analogies": analogies
+        })
+    except Exception as e:
+        log.error(f"Graph analogies error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/sota/graph/infer', methods=['POST'])
+def infer_connections():
+    """Infer new connections in knowledge graph"""
+    data = request.get_json() or {}
+    concept = data.get('concept')
+    
+    if not concept:
+        return jsonify({"error": "concept required"}), 400
+    
+    try:
+        from ai_state_of_the_art import knowledge_graph
+        
+        inferences = knowledge_graph.infer_new_connections(concept)
+        
+        return jsonify({
+            "success": True,
+            "concept": concept,
+            "inferences_found": len(inferences),
+            "inferences": inferences
+        })
+    except Exception as e:
+        log.error(f"Graph inference error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/sota/predict/agents', methods=['POST'])
+def predict_best_agents():
+    """Predict best agents for query"""
+    data = request.get_json() or {}
+    query = data.get('query')
+    agents = data.get('agents', [])
+    top_k = data.get('top_k', 3)
+    
+    if not query or not agents:
+        return jsonify({"error": "query and agents required"}), 400
+    
+    try:
+        from ai_state_of_the_art import predictor
+        
+        predictions = predictor.predict_best_agents(query, agents, top_k)
+        query_type = predictor.classify_query(query)
+        
+        return jsonify({
+            "success": True,
+            "query_type": query_type,
+            "top_k": top_k,
+            "predictions": predictions
+        })
+    except Exception as e:
+        log.error(f"Predict error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/sota/predict/feedback', methods=['POST'])
+def record_prediction_feedback():
+    """Record prediction outcome for learning"""
+    data = request.get_json() or {}
+    agent = data.get('agent')
+    query = data.get('query')
+    score = data.get('score')
+    
+    if not all([agent, query, score]):
+        return jsonify({"error": "agent, query, and score required"}), 400
+    
+    try:
+        from ai_state_of_the_art import predictor
+        
+        predictor.record_outcome(agent, query, score)
+        
+        return jsonify({
+            "success": True,
+            "message": "Prediction feedback recorded"
+        })
+    except Exception as e:
+        log.error(f"Predict feedback error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/sota/continuous/check', methods=['POST'])
+def check_continuous_learning():
+    """Check if continuous learning retraining needed"""
+    data = request.get_json() or {}
+    recent_feedback = data.get('recent_feedback', [])
+    
+    try:
+        from ai_state_of_the_art import continuous_learning
+        
+        result = continuous_learning.check_and_trigger(recent_feedback)
+        
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"Continuous learning error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# ==================== FINAL ENHANCEMENTS API ====================
+
+@app.route('/api/v1/enhancements/dashboard', methods=['GET'])
+def get_final_enhancements_dashboard():
+    """Get final enhancements dashboard"""
+    try:
+        from ai_final_enhancements import get_final_enhancements_dashboard
+        return jsonify(get_final_enhancements_dashboard())
+    except Exception as e:
+        log.error(f"Final enhancements dashboard error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/enhancements/explain', methods=['POST'])
+def explain_decision():
+    """Generate explanation for AI decision"""
+    data = request.get_json() or {}
+    positions = data.get('positions', [])
+    consensus = data.get('consensus', {})
+    
+    try:
+        from ai_final_enhancements import explainability
+        
+        # Convert dict positions to objects
+        class Pos:
+            def __init__(self, d):
+                self.agent_name = d.get('agent')
+                self.stance = d.get('stance')
+                self.confidence = d.get('confidence', 0.5)
+                self.reasoning = d.get('reasoning', '')
+                self.key_points = d.get('key_points', [])
+        
+        pos_objects = [Pos(p) for p in positions]
+        
+        class Consensus:
+            def __init__(self, d):
+                self.consensus_reached = d.get('consensus_reached', False)
+                self.confidence = d.get('confidence', 0)
+        
+        cons_obj = Consensus(consensus)
+        
+        explanation = explainability.explain_consensus(pos_objects, cons_obj)
+        
+        return jsonify({
+            "success": True,
+            "explanation": explanation
+        })
+    except Exception as e:
+        log.error(f"Explain error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/enhancements/memory/store', methods=['POST'])
+def store_memory():
+    """Store fact in long-term memory"""
+    data = request.get_json() or {}
+    user_id = data.get('user_id')
+    fact = data.get('fact')
+    importance = data.get('importance', 1.0)
+    
+    if not user_id or not fact:
+        return jsonify({"error": "user_id and fact required"}), 400
+    
+    try:
+        from ai_final_enhancements import memory
+        
+        memory.remember_user_fact(user_id, fact, importance)
+        
+        return jsonify({
+            "success": True,
+            "message": "Fact stored in memory"
+        })
+    except Exception as e:
+        log.error(f"Memory store error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/enhancements/memory/recall', methods=['GET'])
+def recall_memory():
+    """Recall facts from long-term memory"""
+    user_id = request.args.get('user_id')
+    limit = request.args.get('limit', 10, type=int)
+    
+    if not user_id:
+        return jsonify({"error": "user_id required"}), 400
+    
+    try:
+        from ai_final_enhancements import memory
+        
+        facts = memory.recall_user_facts(user_id, limit)
+        
+        return jsonify({
+            "success": True,
+            "user_id": user_id,
+            "facts": facts,
+            "count": len(facts)
+        })
+    except Exception as e:
+        log.error(f"Memory recall error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/enhancements/bias/check', methods=['POST'])
+def check_bias():
+    """Check response for bias"""
+    data = request.get_json() or {}
+    response = data.get('response')
+    domain = data.get('domain', 'general')
+    
+    if not response:
+        return jsonify({"error": "response required"}), 400
+    
+    try:
+        from ai_final_enhancements import bias_detector
+        
+        result = bias_detector.analyze_response(response, domain)
+        
+        return jsonify({
+            "success": True,
+            "bias_analysis": result
+        })
+    except Exception as e:
+        log.error(f"Bias check error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/enhancements/bias/report', methods=['GET'])
+def get_bias_report():
+    """Get bias detection report"""
+    try:
+        from ai_final_enhancements import bias_detector
+        
+        report = bias_detector.get_bias_report()
+        
+        return jsonify({
+            "success": True,
+            "report": report
+        })
+    except Exception as e:
+        log.error(f"Bias report error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/enhancements/emotion/detect', methods=['POST'])
+def detect_emotion():
+    """Detect emotion from query"""
+    data = request.get_json() or {}
+    query = data.get('query')
+    
+    if not query:
+        return jsonify({"error": "query required"}), 400
+    
+    try:
+        from ai_final_enhancements import emotional_intelligence
+        
+        emotion = emotional_intelligence.detect_emotion(query)
+        
+        return jsonify({
+            "success": True,
+            "emotion": emotion
+        })
+    except Exception as e:
+        log.error(f"Emotion detection error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/enhancements/emotion/adapt', methods=['POST'])
+def adapt_to_emotion():
+    """Adapt response to emotion"""
+    data = request.get_json() or {}
+    response = data.get('response')
+    emotion = data.get('emotion', 'neutral')
+    
+    if not response:
+        return jsonify({"error": "response required"}), 400
+    
+    try:
+        from ai_final_enhancements import emotional_intelligence
+        
+        adapted = emotional_intelligence.adapt_response(response, emotion)
+        
+        return jsonify({
+            "success": True,
+            "adapted_response": adapted
+        })
+    except Exception as e:
+        log.error(f"Emotion adaptation error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/enhancements/abtest/create', methods=['POST'])
+def create_ab_test():
+    """Create A/B test experiment"""
+    data = request.get_json() or {}
+    experiment_id = data.get('experiment_id')
+    description = data.get('description')
+    control = data.get('control_config', {})
+    treatment = data.get('treatment_config', {})
+    
+    if not experiment_id:
+        return jsonify({"error": "experiment_id required"}), 400
+    
+    try:
+        from ai_final_enhancements import ab_testing
+        
+        result = ab_testing.create_experiment(experiment_id, description, control, treatment)
+        
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"AB test create error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/enhancements/abtest/assign/<experiment_id>/<user_id>', methods=['GET'])
+def assign_ab_test(experiment_id, user_id):
+    """Assign user to A/B test variant"""
+    try:
+        from ai_final_enhancements import ab_testing
+        
+        variant = ab_testing.assign_variant(experiment_id, user_id)
+        
+        return jsonify({
+            "success": True,
+            "experiment_id": experiment_id,
+            "user_id": user_id,
+            "variant": variant
+        })
+    except Exception as e:
+        log.error(f"AB test assign error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/enhancements/abtest/result', methods=['POST'])
+def record_ab_result():
+    """Record A/B test result"""
+    data = request.get_json() or {}
+    experiment_id = data.get('experiment_id')
+    variant = data.get('variant')
+    metric = data.get('metric')
+    value = data.get('value')
+    
+    if not all([experiment_id, variant, metric, value is not None]):
+        return jsonify({"error": "experiment_id, variant, metric, value required"}), 400
+    
+    try:
+        from ai_final_enhancements import ab_testing
+        
+        ab_testing.record_result(experiment_id, variant, metric, value)
+        
+        return jsonify({
+            "success": True,
+            "message": "Result recorded"
+        })
+    except Exception as e:
+        log.error(f"AB test result error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/enhancements/abtest/analyze/<experiment_id>', methods=['GET'])
+def analyze_ab_test(experiment_id):
+    """Analyze A/B test results"""
+    try:
+        from ai_final_enhancements import ab_testing
+        
+        analysis = ab_testing.analyze_experiment(experiment_id)
+        
+        return jsonify({
+            "success": True,
+            "analysis": analysis
+        })
+    except Exception as e:
+        log.error(f"AB test analyze error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# ==================== BASE44/REPLIT COMPETITOR API ====================
+
+@app.route('/api/v1/builder/nl-to-app', methods=['POST'])
+def nl_to_app():
+    """Generate full app from natural language prompt"""
+    data = request.get_json() or {}
+    prompt = data.get('prompt', '')
+    
+    if not prompt:
+        return jsonify({"error": "Prompt is required"}), 400
+    
+    try:
+        from website_builder.base44_competitor import nl_parser, db_generator, auth_generator
+        
+        # Parse natural language
+        requirements = nl_parser.parse_prompt(prompt)
+        
+        # Generate database schema
+        schema = db_generator.generate_schema(
+            requirements['entities'],
+            requirements['features']
+        )
+        
+        # Generate auth system
+        auth_methods = [AuthMethod.JWT]
+        if 'oauth' in prompt.lower():
+            auth_methods.append(AuthMethod.OAUTH_GOOGLE)
+        if 'mfa' in prompt.lower() or '2fa' in prompt.lower():
+            auth_methods.append(AuthMethod.MFA_EMAIL)
+        
+        auth = auth_generator.generate_auth_system(auth_methods, requirements['tech_stack'])
+        
+        return jsonify({
+            "success": True,
+            "prompt": prompt,
+            "parsed_requirements": requirements,
+            "database_schema": {
+                "tables": list(schema.tables.keys()),
+                "relationships": len(schema.relationships),
+                "migrations": len(schema.migrations)
+            },
+            "auth_system": {
+                "methods": [m.value for m in auth.methods],
+                "user_fields": list(auth.user_model['fields'].keys())
+            },
+            "tech_stack": requirements['tech_stack'],
+            "complexity": requirements['complexity'],
+            "estimated_hours": requirements['estimated_hours']
+        })
+        
+    except Exception as e:
+        log.error(f"NL to app error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/templates', methods=['GET'])
+def list_templates():
+    """List available app templates"""
+    try:
+        from website_builder.base44_competitor import template_marketplace
+        
+        templates = template_marketplace.list_templates()
+        
+        return jsonify({
+            "success": True,
+            "templates": [
+                {
+                    "id": k,
+                    "name": v['name'],
+                    "description": v['description'],
+                    "type": v['type'].value,
+                    "features": v['features'],
+                    "popularity": v['popularity'],
+                    "complexity": v['complexity']
+                }
+                for k, v in template_marketplace.templates.items()
+            ]
+        })
+        
+    except Exception as e:
+        log.error(f"List templates error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/template/<template_id>', methods=['POST'])
+def use_template(template_id):
+    """Generate app from template"""
+    data = request.get_json() or {}
+    customization = data.get('customization', {})
+    
+    try:
+        from website_builder.base44_competitor import template_marketplace
+        
+        app = template_marketplace.use_template(template_id, customization)
+        
+        return jsonify({
+            "success": True,
+            "app_id": app.app_id,
+            "name": app.name,
+            "type": app.app_type.value,
+            "features": app.features,
+            "tech_stack": app.tech_stack
+        })
+        
+    except Exception as e:
+        log.error(f"Use template error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/deploy/config', methods=['POST'])
+def generate_deploy_config():
+    """Generate deployment configuration"""
+    data = request.get_json() or {}
+    platform = data.get('platform', 'docker')
+    
+    try:
+        from website_builder.base44_competitor import deployment_system, nl_parser, db_generator, auth_generator
+        from website_builder.base44_competitor import AppType, AuthMethod, GeneratedApp
+        
+        # Create a sample app for demo
+        requirements = nl_parser.parse_prompt("SaaS dashboard with auth and database")
+        schema = db_generator.generate_schema(requirements['entities'], requirements['features'])
+        auth = auth_generator.generate_auth_system([AuthMethod.JWT], requirements['tech_stack'])
+        
+        app = GeneratedApp(
+            app_id=str(uuid.uuid4()),
+            name="Demo App",
+            description="Demo deployment",
+            app_type=AppType.SAAS_DASHBOARD,
+            files={},
+            database=schema,
+            auth=auth,
+            deployment=None,
+            features=requirements['features'],
+            tech_stack=requirements['tech_stack'],
+            estimated_cost={'monthly': 50.0, 'setup': 0.0},
+            generated_at=datetime.now()
+        )
+        
+        deployment = deployment_system.generate_deployment_config(app, platform)
+        
+        return jsonify({
+            "success": True,
+            "platform": deployment.platform,
+            "dockerfile": deployment.dockerfile,
+            "docker_compose": deployment.docker_compose,
+            "env_vars": deployment.env_vars,
+            "nginx_config": deployment.nginx_config,
+            "deploy_script": deployment.deploy_script,
+            "health_check": deployment.health_check
+        })
+        
+    except Exception as e:
+        log.error(f"Deploy config error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/preview/live', methods=['POST'])
+def generate_preview_system():
+    """Generate live preview system"""
+    try:
+        from website_builder.base44_competitor import preview_system
+        
+        preview = preview_system.generate_preview_system()
+        
+        return jsonify({
+            "success": True,
+            "websocket_handler": preview['websocket_handler'],
+            "file_watcher": preview['file_watcher'],
+            "browser_client": preview['browser_client'],
+            "preview_server": preview['preview_server']
+        })
+        
+    except Exception as e:
+        log.error(f"Preview system error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/collaboration/setup', methods=['POST'])
+def generate_collaboration():
+    """Generate real-time collaboration system"""
+    try:
+        from website_builder.base44_competitor import collaboration_system, nl_parser, db_generator, auth_generator
+        from website_builder.base44_competitor import AppType, AuthMethod, GeneratedApp
+        
+        requirements = nl_parser.parse_prompt("Collaborative app")
+        schema = db_generator.generate_schema(requirements['entities'], requirements['features'])
+        auth = auth_generator.generate_auth_system([AuthMethod.JWT], requirements['tech_stack'])
+        
+        app = GeneratedApp(
+            app_id=str(uuid.uuid4()),
+            name="Collab App",
+            description="Collaborative app",
+            app_type=AppType.SAAS_DASHBOARD,
+            files={},
+            database=schema,
+            auth=auth,
+            deployment=None,
+            features=requirements['features'],
+            tech_stack=requirements['tech_stack'],
+            estimated_cost={'monthly': 50.0, 'setup': 0.0},
+            generated_at=datetime.now()
+        )
+        
+        collab = collaboration_system.generate_collab_system(app)
+        
+        return jsonify({
+            "success": True,
+            "websocket_handler": collab['websocket_handler'],
+            "presence_system": collab['presence_system'],
+            "conflict_resolution": collab['conflict_resolution'],
+            "cursor_tracking": collab['cursor_tracking'],
+            "chat_system": collab['chat_system']
+        })
+        
+    except Exception as e:
+        log.error(f"Collaboration error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/git/setup', methods=['POST'])
+def generate_git_setup():
+    """Generate version control setup"""
+    try:
+        from website_builder.base44_competitor import version_control, nl_parser, db_generator, auth_generator
+        from website_builder.base44_competitor import AppType, AuthMethod, GeneratedApp
+        
+        requirements = nl_parser.parse_prompt("Git-enabled app")
+        schema = db_generator.generate_schema(requirements['entities'], requirements['features'])
+        auth = auth_generator.generate_auth_system([AuthMethod.JWT], requirements['tech_stack'])
+        
+        app = GeneratedApp(
+            app_id=str(uuid.uuid4()),
+            name="Git App",
+            description="Git-enabled app",
+            app_type=AppType.SAAS_DASHBOARD,
+            files={},
+            database=schema,
+            auth=auth,
+            deployment=None,
+            features=requirements['features'],
+            tech_stack=requirements['tech_stack'],
+            estimated_cost={'monthly': 50.0, 'setup': 0.0},
+            generated_at=datetime.now()
+        )
+        
+        git_setup = version_control.generate_git_setup(app)
+        
+        return jsonify({
+            "success": True,
+            "gitignore": git_setup['gitignore'],
+            "readme": git_setup['readme'],
+            "contributing": git_setup['contributing'],
+            "license": git_setup['license'],
+            "github_actions": git_setup['github_actions'],
+            "precommit": git_setup['precommit']
+        })
+        
+    except Exception as e:
+        log.error(f"Git setup error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# ==================== MASSIVE TRAINING API ====================
+
+@app.route('/api/v1/training/massive/dashboard', methods=['GET'])
+def get_massive_training_dashboard():
+    """Get massive training dashboard"""
+    try:
+        from ai_massive_training import get_massive_training_dashboard
+        return jsonify(get_massive_training_dashboard())
+    except Exception as e:
+        log.error(f"Massive training dashboard error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/training/massive/generate', methods=['POST'])
+def generate_synthetic_dataset():
+    """Generate massive synthetic training dataset"""
+    data = request.get_json() or {}
+    domain = data.get('domain', 'code')
+    count = data.get('count', 1000)
+    difficulty = data.get('difficulty_distribution', {'easy': 0.3, 'medium': 0.5, 'hard': 0.2})
+    
+    try:
+        from ai_massive_training import synthetic_generator
+        
+        dataset = synthetic_generator.generate_dataset(domain, count, difficulty)
+        
+        return jsonify({
+            "success": True,
+            "domain": domain,
+            "generated_count": len(dataset),
+            "sample_scenarios": dataset[:5],
+            "total_templates": sum(len(d['templates']) for d in synthetic_generator.templates.values())
+        })
+    except Exception as e:
+        log.error(f"Synthetic generation error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/training/massive/arena/match', methods=['POST'])
+def run_selfplay_match():
+    """Run self-play training match"""
+    data = request.get_json() or {}
+    agent_a = data.get('agent_a')
+    agent_b = data.get('agent_b')
+    query = data.get('query')
+    domain = data.get('domain')
+    
+    if not all([agent_a, agent_b, query, domain]):
+        return jsonify({"error": "agent_a, agent_b, query, domain required"}), 400
+    
+    try:
+        from ai_massive_training import self_play_arena
+        
+        match = self_play_arena.run_match(agent_a, agent_b, query, domain, {})
+        
+        return jsonify({
+            "success": True,
+            "match_id": match.match_id,
+            "winner": match.winner,
+            "scores": match.scores,
+            "agent_elos": {
+                agent_a: self_play_arena.elo_ratings[agent_a],
+                agent_b: self_play_arena.elo_ratings[agent_b]
+            }
+        })
+    except Exception as e:
+        log.error(f"Self-play match error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/training/massive/arena/tournament', methods=['POST'])
+def run_tournament():
+    """Run self-play tournament"""
+    data = request.get_json() or {}
+    agents = data.get('agents', [])
+    queries = data.get('queries', [])
+    domain = data.get('domain')
+    
+    if not all([agents, queries, domain]):
+        return jsonify({"error": "agents, queries, domain required"}), 400
+    
+    try:
+        from ai_massive_training import self_play_arena
+        
+        result = self_play_arena.run_tournament(agents, queries, domain)
+        
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"Tournament error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/training/massive/arena/stats', methods=['GET'])
+def get_arena_stats():
+    """Get self-play arena statistics"""
+    try:
+        from ai_massive_training import self_play_arena
+        return jsonify(self_play_arena.get_arena_stats())
+    except Exception as e:
+        log.error(f"Arena stats error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/training/massive/curriculum/progress/<agent_name>', methods=['GET'])
+def get_curriculum_progress(agent_name):
+    """Get curriculum learning progress"""
+    try:
+        from ai_massive_training import curriculum
+        
+        report = curriculum.get_progress_report(agent_name)
+        
+        return jsonify(report)
+    except Exception as e:
+        log.error(f"Curriculum progress error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/training/massive/curriculum/record', methods=['POST'])
+def record_curriculum_performance():
+    """Record curriculum learning performance"""
+    data = request.get_json() or {}
+    agent = data.get('agent')
+    level = data.get('level')
+    score = data.get('score')
+    
+    if not all([agent, level, score is not None]):
+        return jsonify({"error": "agent, level, score required"}), 400
+    
+    try:
+        from ai_massive_training import curriculum
+        
+        curriculum.record_performance(agent, level, score)
+        
+        return jsonify({
+            "success": True,
+            "message": "Performance recorded",
+            "current_level": curriculum.get_current_level(agent),
+            "ready_for_promotion": curriculum._check_promotion_ready(agent)
+        })
+    except Exception as e:
+        log.error(f"Curriculum record error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/training/massive/transfer/execute', methods=['POST'])
+def execute_transfer_learning():
+    """Execute knowledge transfer between domains"""
+    data = request.get_json() or {}
+    source = data.get('source_domain')
+    target = data.get('target_domain')
+    knowledge = data.get('knowledge', {})
+    
+    if not all([source, target]):
+        return jsonify({"error": "source_domain and target_domain required"}), 400
+    
+    try:
+        from ai_massive_training import transfer_network
+        
+        result = transfer_network.execute_transfer(source, target, knowledge)
+        
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"Transfer error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/training/massive/transfer/stats', methods=['GET'])
+def get_transfer_stats():
+    """Get transfer learning statistics"""
+    try:
+        from ai_massive_training import transfer_network
+        return jsonify(transfer_network.get_transfer_stats())
+    except Exception as e:
+        log.error(f"Transfer stats error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/training/massive/hyperopt/suggest', methods=['POST'])
+def suggest_hyperparams():
+    """Suggest hyperparameter configuration"""
+    data = request.get_json() or {}
+    domain = data.get('domain', 'general')
+    iteration = data.get('iteration', 0)
+    
+    try:
+        from ai_massive_training import hyperparam_optimizer
+        
+        config = hyperparam_optimizer.suggest_configuration(domain, iteration)
+        
+        return jsonify({
+            "success": True,
+            "domain": domain,
+            "iteration": iteration,
+            "suggested_config": config
+        })
+    except Exception as e:
+        log.error(f"Hyperopt suggest error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/training/massive/hyperopt/record', methods=['POST'])
+def record_hyperparam_trial():
+    """Record hyperparameter trial result"""
+    data = request.get_json() or {}
+    domain = data.get('domain')
+    config = data.get('config', {})
+    performance = data.get('performance')
+    
+    if not all([domain, performance is not None]):
+        return jsonify({"error": "domain and performance required"}), 400
+    
+    try:
+        from ai_massive_training import hyperparam_optimizer
+        
+        hyperparam_optimizer.record_trial(domain, config, performance)
+        
+        return jsonify({
+            "success": True,
+            "best_config": hyperparam_optimizer.get_best_configuration(domain)
+        })
+    except Exception as e:
+        log.error(f"Hyperopt record error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/training/massive/ensemble/stack', methods=['POST'])
+def stack_ensemble():
+    """Run ensemble stacking prediction"""
+    data = request.get_json() or {}
+    agent_outputs = data.get('agent_outputs', {})
+    
+    try:
+        from ai_massive_training import ensemble_stacker
+        
+        result = ensemble_stacker.stack_predict(agent_outputs)
+        
+        return jsonify({
+            "success": True,
+            "ensemble_result": result
+        })
+    except Exception as e:
+        log.error(f"Ensemble stack error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/training/massive/session', methods=['POST'])
+def run_massive_training_session():
+    """Run complete massive training session"""
+    data = request.get_json() or {}
+    domain = data.get('domain', 'code')
+    iterations = data.get('iterations', 1000)
+    
+    try:
+        from ai_massive_training import run_massive_training_session
+        
+        result = run_massive_training_session(domain, iterations)
+        
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"Massive session error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# ==================== SERVER RELIABILITY API ====================
+
+@app.route('/api/v1/reliability/dashboard', methods=['GET'])
+def get_reliability_dashboard():
+    """Get server reliability dashboard"""
+    try:
+        from server_reliability import get_reliability_dashboard
+        return jsonify(get_reliability_dashboard())
+    except Exception as e:
+        log.error(f"Reliability dashboard error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/reliability/health', methods=['GET'])
+def get_health_check():
+    """Get current health status of all services"""
+    try:
+        from server_reliability import health_monitor
+        return jsonify(health_monitor.get_health_report())
+    except Exception as e:
+        log.error(f"Health check error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/reliability/metrics', methods=['GET'])
+def get_system_metrics():
+    """Get system metrics"""
+    try:
+        from server_reliability import metrics_collector
+        return jsonify(metrics_collector.get_metrics_report())
+    except Exception as e:
+        log.error(f"Metrics error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/reliability/recover/<service>', methods=['POST'])
+def recover_service(service):
+    """Attempt to recover a failing service"""
+    try:
+        from server_reliability import auto_recovery
+        success = auto_recovery.attempt_recovery(service)
+        return jsonify({
+            "success": success,
+            "service": service,
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        log.error(f"Recovery error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# ==================== LATEX & VISUALIZATION API ====================
+
+@app.route('/api/v1/latex/render', methods=['POST'])
+def render_latex_endpoint():
+    """Render LaTeX math to HTML"""
+    data = request.get_json() or {}
+    latex = data.get('latex', '')
+    display_mode = data.get('display_mode', False)
+    
+    if not latex:
+        return jsonify({"error": "latex expression required"}), 400
+    
+    try:
+        from multi_domain.latex_renderer import render_latex
+        result = render_latex(latex, display_mode)
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"LaTeX render error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/latex/css', methods=['GET'])
+def get_latex_css():
+    """Get CSS styles for LaTeX rendering"""
+    try:
+        from multi_domain.latex_renderer import get_latex_css
+        return jsonify({
+            "success": True,
+            "css": get_latex_css()
+        })
+    except Exception as e:
+        log.error(f"LaTeX CSS error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/visualization/chart', methods=['POST'])
+def create_chart():
+    """Generate interactive chart"""
+    data = request.get_json() or {}
+    chart_type = data.get('type', 'line')
+    chart_data = data.get('data', {})
+    width = data.get('width', 800)
+    height = data.get('height', 400)
+    
+    try:
+        from multi_domain.visualization_engine import create_chart
+        result = create_chart(chart_type, chart_data, width, height)
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"Chart creation error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/visualization/simulation', methods=['POST'])
+def create_simulation():
+    """Generate physics simulation"""
+    data = request.get_json() or {}
+    sim_type = data.get('type', 'particle')
+    params = {k: v for k, v in data.items() if k not in ['type']}
+    
+    try:
+        from multi_domain.visualization_engine import create_simulation
+        result = create_simulation(sim_type, **params)
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"Simulation creation error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# ==================== AGENT ORCHESTRATION API ====================
+
+@app.route('/api/v1/orchestration/dashboard', methods=['GET'])
+def get_orchestration_dashboard():
+    """Get orchestration system dashboard"""
+    try:
+        from ai_orchestration_system import get_orchestration_dashboard
+        return jsonify(get_orchestration_dashboard())
+    except Exception as e:
+        log.error(f"Orchestration dashboard error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/orchestration/decide', methods=['POST'])
+def decide_interaction_mode():
+    """Decide whether agents should debate or collaborate"""
+    data = request.get_json() or {}
+    query = data.get('query')
+    domain = data.get('domain', 'general')
+    agents = data.get('agents', [])
+    
+    if not query:
+        return jsonify({"error": "query required"}), 400
+    
+    try:
+        from ai_orchestration_system import orchestrator
+        
+        decision = orchestrator.decide_interaction_mode(query, domain, agents)
+        
+        return jsonify({
+            "success": True,
+            "decision": {
+                "mode": decision.mode,
+                "confidence": decision.confidence,
+                "reasoning": decision.reasoning,
+                "agent_assignments": decision.agent_assignments,
+                "rounds": decision.rounds,
+                "dynamic_switch": decision.dynamic_switch,
+                "subtasks": decision.subtasks
+            }
+        })
+    except Exception as e:
+        log.error(f"Orchestration decision error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/orchestration/feedback', methods=['POST'])
+def record_orchestration_feedback():
+    """Record outcome to train orchestration system"""
+    data = request.get_json() or {}
+    query = data.get('query')
+    mode = data.get('mode')
+    outcome_score = data.get('outcome_score')
+    user_satisfaction = data.get('user_satisfaction')
+    
+    if not all([query, mode, outcome_score is not None]):
+        return jsonify({"error": "query, mode, outcome_score required"}), 400
+    
+    try:
+        from ai_orchestration_system import orchestrator
+        
+        orchestrator.record_outcome(query, mode, outcome_score, user_satisfaction)
+        
+        return jsonify({
+            "success": True,
+            "message": "Outcome recorded - orchestration system learning",
+            "training_stats": orchestrator.get_training_stats()
+        })
+    except Exception as e:
+        log.error(f"Orchestration feedback error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/orchestration/collaborate', methods=['POST'])
+def run_collaboration():
+    """Run collaborative work session"""
+    data = request.get_json() or {}
+    query = data.get('query')
+    agents = data.get('agents', [])
+    rounds = data.get('rounds', 3)
+    
+    if not query or len(agents) < 2:
+        return jsonify({"error": "query and at least 2 agents required"}), 400
+    
+    try:
+        from ai_orchestration_system import CollaborativeWorkSession
+        import uuid
+        
+        session_id = str(uuid.uuid4())
+        session = CollaborativeWorkSession(session_id, agents, query)
+        
+        results = []
+        for _ in range(rounds):
+            round_result = session.run_collaboration_round()
+            results.append(round_result)
+        
+        return jsonify({
+            "success": True,
+            "session_id": session_id,
+            "rounds": rounds,
+            "results": results,
+            "summary": session.get_session_summary()
+        })
+    except Exception as e:
+        log.error(f"Collaboration error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/orchestration/hybrid', methods=['POST'])
+def run_hybrid_session():
+    """Run hybrid debate-collaboration session"""
+    data = request.get_json() or {}
+    query = data.get('query')
+    debate_agents = data.get('debate_agents', [])
+    synthesis_agents = data.get('synthesis_agents', [])
+    debate_rounds = data.get('debate_rounds', 2)
+    
+    if not query or len(debate_agents) < 2 or len(synthesis_agents) < 1:
+        return jsonify({"error": "query, debate_agents (2+), synthesis_agents (1+) required"}), 400
+    
+    try:
+        from ai_orchestration_system import HybridDebateCollaboration
+        import uuid
+        
+        session_id = str(uuid.uuid4())
+        hybrid = HybridDebateCollaboration(session_id, debate_agents, synthesis_agents, query)
+        
+        # Run debate phase
+        debate_result = hybrid.run_debate_phase(debate_rounds)
+        
+        # Run synthesis phase
+        synthesis_result = hybrid.run_synthesis_phase()
+        
+        return jsonify({
+            "success": True,
+            "session_id": session_id,
+            "debate_phase": debate_result,
+            "synthesis_phase": synthesis_result,
+            "summary": hybrid.get_hybrid_summary()
+        })
+    except Exception as e:
+        log.error(f"Hybrid session error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/orchestration/stats', methods=['GET'])
+def get_orchestration_stats():
+    """Get orchestration training statistics"""
+    try:
+        from ai_quality_assurance import integration_tests
+        return jsonify(integration_tests.run_all_tests())
+    except Exception as e:
+        log.error(f"Integration tests error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/qa/benchmarks', methods=['GET'])
+def get_benchmarks():
+    """Get performance benchmarks"""
+    try:
+        from ai_quality_assurance import benchmarks
+        return jsonify(benchmarks.get_benchmark_report())
+    except Exception as e:
+        log.error(f"Benchmarks error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/qa/overtraining', methods=['GET'])
+def check_overtraining():
+    """Check for overtraining across all agents"""
+    try:
+        from ai_quality_assurance import overtraining_detector
+        return jsonify(overtraining_detector.get_overtraining_report())
+    except Exception as e:
+        log.error(f"Overtraining check error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/qa/contradictions', methods=['GET'])
+def get_contradictions():
+    """Get contradictory feedback report"""
+    try:
+        from ai_quality_assurance import feedback_handler
+        return jsonify(feedback_handler.get_contradiction_report())
+    except Exception as e:
+        log.error(f"Contradictions error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# ==================== ENHANCED WEBSITE BUILDER API ====================
+
+@app.route('/api/v1/builder/enhanced/nl-to-app', methods=['POST'])
+def enhanced_nl_to_app():
+    """Enhanced natural language to app generation"""
+    data = request.get_json() or {}
+    prompt = data.get('prompt', '')
+    
+    if not prompt:
+        return jsonify({"error": "Prompt is required"}), 400
+    
+    try:
+        from website_builder.enhanced_base44_competitor import nl_parser, db_generator, auth_generator
+        from website_builder.enhanced_base44_competitor import deployment_system
+        
+        # Parse natural language
+        requirements = nl_parser.parse_prompt(prompt)
+        
+        # Generate database schema
+        schema = db_generator.generate_schema(
+            requirements['entities'],
+            requirements['features'],
+            db_type='postgresql'
+        )
+        
+        # Generate auth system
+        from website_builder.enhanced_base44_competitor import AuthMethod
+        auth_methods = [AuthMethod.JWT]
+        if 'oauth' in prompt.lower():
+            auth_methods.append(AuthMethod.OAUTH_GOOGLE)
+        if 'mfa' in prompt.lower() or '2fa' in prompt.lower():
+            auth_methods.append(AuthMethod.MFA_EMAIL)
+        
+        auth = auth_generator.generate_auth_system(auth_methods, requirements['tech_stack'])
+        
+        return jsonify({
+            "success": True,
+            "prompt": prompt,
+            "parsed_requirements": requirements,
+            "database_schema": {
+                "tables": list(schema.tables.keys()),
+                "relationships": schema.relationships,
+                "migrations": schema.migrations[:2]  # Show first 2
+            },
+            "auth_system": {
+                "methods": [m.value for m in auth.methods],
+                "user_fields": list(auth.user_model['fields'].keys())
+            },
+            "tech_stack": requirements['tech_stack'],
+            "complexity": requirements['complexity'],
+            "estimated_hours": requirements['estimated_hours']
+        })
+        
+    except Exception as e:
+        log.error(f"Enhanced NL to app error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/enhanced/components', methods=['GET'])
+def list_components():
+    """List all available UI components"""
+    category = request.args.get('category')
+    
+    try:
+        from website_builder.enhanced_base44_competitor import component_library
+        
+        if category:
+            components = component_library.get_components_by_category(category)
+            return jsonify({
+                "category": category,
+                "components": [{"name": c.name, "description": c.description} for c in components]
+            })
+        else:
+            all_components = component_library.list_all_components()
+            return jsonify({
+                "total_components": sum(len(v) for v in all_components.values()),
+                "by_category": all_components
+            })
+    except Exception as e:
+        log.error(f"List components error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/enhanced/component/<name>', methods=['GET'])
+def get_component(name):
+    """Get specific component details"""
+    try:
+        from website_builder.enhanced_base44_competitor import component_library
+        
+        component = component_library.get_component(name)
+        if not component:
+            return jsonify({"error": "Component not found"}), 404
+        
+        return jsonify({
+            "name": component.name,
+            "category": component.category,
+            "description": component.description,
+            "props": component.props,
+            "styles": component.styles,
+            "preview": component.preview_html
+        })
+    except Exception as e:
+        log.error(f"Get component error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/enhanced/preview/create', methods=['POST'])
+def create_preview():
+    """Create real-time preview session"""
+    data = request.get_json() or {}
+    project_id = data.get('project_id', str(uuid.uuid4()))
+    files = data.get('files', {})
+    
+    try:
+        from website_builder.enhanced_base44_competitor import preview_system
+        
+        result = preview_system.create_preview_session(project_id, files)
+        
+        return jsonify({
+            "success": True,
+            "preview_id": result['preview_id'],
+            "preview_url": result['preview_url'],
+            "websocket_url": result['websocket_url'],
+            "embed_code": result['embed_code']
+        })
+    except Exception as e:
+        log.error(f"Create preview error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/enhanced/preview/<preview_id>/status', methods=['GET'])
+def get_preview_status(preview_id):
+    """Get preview session status"""
+    try:
+        from website_builder.enhanced_base44_competitor import preview_system
+        
+        status = preview_system.get_preview_status(preview_id)
+        return jsonify(status)
+    except Exception as e:
+        log.error(f"Preview status error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/enhanced/templates', methods=['GET'])
+def list_templates():
+    """List available templates"""
+    category = request.args.get('category')
+    complexity = request.args.get('complexity')
+    
+    try:
+        from website_builder.enhanced_base44_competitor import template_marketplace
+        
+        templates = template_marketplace.list_templates(category, complexity)
+        
+        return jsonify({
+            "success": True,
+            "count": len(templates),
+            "templates": templates
+        })
+    except Exception as e:
+        log.error(f"List templates error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/enhanced/template/<template_id>', methods=['GET'])
+def get_template(template_id):
+    """Get specific template"""
+    try:
+        from website_builder.enhanced_base44_competitor import template_marketplace
+        
+        template = template_marketplace.get_template(template_id)
+        if not template:
+            return jsonify({"error": "Template not found"}), 404
+        
+        return jsonify(template)
+    except Exception as e:
+        log.error(f"Get template error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/enhanced/template/<template_id>/use', methods=['POST'])
+def use_template(template_id):
+    """Use a template with customizations"""
+    data = request.get_json() or {}
+    customization = data.get('customization', {})
+    
+    try:
+        from website_builder.enhanced_base44_competitor import template_marketplace
+        
+        result = template_marketplace.use_template(template_id, customization)
+        
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"Use template error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/enhanced/collab/create', methods=['POST'])
+def create_collab_session():
+    """Create real-time collaboration session"""
+    data = request.get_json() or {}
+    project_id = data.get('project_id', str(uuid.uuid4()))
+    owner_id = data.get('owner_id', 'anonymous')
+    
+    try:
+        from website_builder.enhanced_base44_competitor import collaboration_system
+        
+        result = collaboration_system.create_collab_session(project_id, owner_id)
+        
+        return jsonify({
+            "success": True,
+            "session_id": result['session_id'],
+            "invite_link": result['invite_link'],
+            "websocket_endpoint": result['websocket_endpoint']
+        })
+    except Exception as e:
+        log.error(f"Create collab session error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/enhanced/deploy/config', methods=['POST'])
+def generate_deploy_config():
+    """Generate deployment configuration"""
+    data = request.get_json() or {}
+    platform = data.get('platform', 'docker')
+    
+    try:
+        from website_builder.enhanced_base44_competitor import deployment_system, nl_parser, db_generator, auth_generator
+        from website_builder.enhanced_base44_competitor import AppType, AuthMethod, GeneratedApp
+        
+        # Create a sample app for demo
+        requirements = nl_parser.parse_prompt("SaaS dashboard with auth and database")
+        schema = db_generator.generate_schema(requirements['entities'], requirements['features'])
+        auth = auth_generator.generate_auth_system([AuthMethod.JWT], requirements['tech_stack'])
+        
+        app = GeneratedApp(
+            app_id=str(uuid.uuid4()),
+            name="Demo App",
+            description="Demo deployment",
+            app_type=AppType.SAAS_DASHBOARD,
+            files={},
+            database=schema,
+            auth=auth,
+            deployment=None,
+            features=requirements['features'],
+            tech_stack=requirements['tech_stack'],
+            estimated_cost={'monthly': 50.0, 'setup': 0.0},
+            generated_at=datetime.now()
+        )
+        
+        deployment = deployment_system.generate_deployment_config(app, platform)
+        
+        return jsonify({
+            "success": True,
+            "platform": deployment.platform,
+            "dockerfile": deployment.dockerfile,
+            "docker_compose": deployment.docker_compose,
+            "env_vars": deployment.env_vars,
+            "nginx_config": deployment.nginx_config,
+            "deploy_script": deployment.deploy_script,
+            "health_check": deployment.health_check
+        })
+        
+    except Exception as e:
+        log.error(f"Deploy config error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# ==================== FINAL ADDITIONS API ====================
+
+@app.route('/api/v1/builder/mobile/export', methods=['POST'])
+def export_mobile_app():
+    """Export web app to mobile (React Native or Flutter)"""
+    data = request.get_json() or {}
+    web_app = data.get('web_app', {})
+    platform = data.get('platform', 'react_native')  # or 'flutter'
+    
+    try:
+        from website_builder.final_additions import mobile_exporter
+        
+        if platform == 'react_native':
+            result = mobile_exporter.export_to_react_native(web_app)
+        elif platform == 'flutter':
+            result = mobile_exporter.export_to_flutter(web_app)
+        else:
+            return jsonify({"error": "Platform must be 'react_native' or 'flutter'"}), 400
+        
+        return jsonify({
+            "success": True,
+            "platform": result['platform'],
+            "files_count": len(result['files']),
+            "files": {k: v[:200] if isinstance(v, str) else v for k, v in result['files'].items()},
+            "requirements": result['requirements'],
+            "build_commands": result['build_commands']
+        })
+    except Exception as e:
+        log.error(f"Mobile export error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/code-review', methods=['POST'])
+def ai_code_review():
+    """AI-powered code review"""
+    data = request.get_json() or {}
+    code = data.get('code', '')
+    filename = data.get('filename', 'unknown.js')
+    language = data.get('language', 'javascript')
+    
+    if not code:
+        return jsonify({"error": "code is required"}), 400
+    
+    try:
+        from website_builder.final_additions import code_reviewer
+        
+        review = code_reviewer.review_code(code, filename, language)
+        
+        return jsonify(review)
+    except Exception as e:
+        log.error(f"Code review error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/code-review/pr', methods=['POST'])
+def review_pull_request():
+    """Review pull request with multiple files"""
+    data = request.get_json() or {}
+    files = data.get('files', [])
+    
+    try:
+        from website_builder.final_additions import code_reviewer
+        
+        result = code_reviewer.review_pull_request(files)
+        
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"PR review error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/performance/measure', methods=['POST'])
+def measure_performance():
+    """Measure Core Web Vitals performance"""
+    data = request.get_json() or {}
+    page_url = data.get('url', '/')
+    html_content = data.get('html', '')
+    
+    try:
+        from website_builder.final_additions import performance_profiler
+        
+        vitals = performance_profiler.measure_page_performance(page_url, html_content)
+        
+        return jsonify(vitals)
+    except Exception as e:
+        log.error(f"Performance measure error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/performance/optimize', methods=['POST'])
+def get_performance_recommendations():
+    """Get performance optimization recommendations"""
+    data = request.get_json() or {}
+    page_url = data.get('url', '/')
+    
+    try:
+        from website_builder.final_additions import performance_profiler
+        
+        report = performance_profiler.generate_optimization_report(page_url)
+        
+        return jsonify(report)
+    except Exception as e:
+        log.error(f"Performance optimization error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/ab-test/create', methods=['POST'])
+def create_ab_test():
+    """Create A/B test for UI"""
+    data = request.get_json() or {}
+    name = data.get('name', '')
+    description = data.get('description', '')
+    variants = data.get('variants', [])
+    
+    if not name or len(variants) < 2:
+        return jsonify({"error": "name and at least 2 variants required"}), 400
+    
+    try:
+        from website_builder.final_additions import ab_testing
+        
+        result = ab_testing.create_experiment(name, description, variants)
+        
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"A/B test create error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/ab-test/<experiment_id>/assign', methods=['POST'])
+def assign_ab_variant(experiment_id):
+    """Assign user to A/B test variant"""
+    data = request.get_json() or {}
+    user_id = data.get('user_id', str(uuid.uuid4()))
+    
+    try:
+        from website_builder.final_additions import ab_testing
+        
+        assignment = ab_testing.assign_variant(experiment_id, user_id)
+        
+        return jsonify(assignment)
+    except Exception as e:
+        log.error(f"A/B assign error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/ab-test/<experiment_id>/track', methods=['POST'])
+def track_ab_event(experiment_id):
+    """Track event for A/B test"""
+    data = request.get_json() or {}
+    variant = data.get('variant', 0)
+    event_type = data.get('event_type', '')
+    value = data.get('value', 1.0)
+    
+    try:
+        from website_builder.final_additions import ab_testing
+        
+        result = ab_testing.track_event(experiment_id, variant, event_type, value)
+        
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"A/B track error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/ab-test/<experiment_id>/results', methods=['GET'])
+def get_ab_results(experiment_id):
+    """Get A/B test results"""
+    try:
+        from website_builder.final_additions import ab_testing
+        
+        results = ab_testing.get_results(experiment_id)
+        
+        return jsonify(results)
+    except Exception as e:
+        log.error(f"A/B results error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/i18n/extract', methods=['POST'])
+def extract_i18n_strings():
+    """Extract translatable strings from code"""
+    data = request.get_json() or {}
+    code = data.get('code', '')
+    
+    try:
+        from website_builder.final_additions import i18n_system
+        
+        strings = i18n_system.extract_strings(code)
+        
+        return jsonify({
+            "success": True,
+            "strings_found": len(strings),
+            "strings": strings
+        })
+    except Exception as e:
+        log.error(f"i18n extract error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/i18n/translate', methods=['POST'])
+def auto_translate():
+    """Auto-translate strings to target locale"""
+    data = request.get_json() or {}
+    strings = data.get('strings', [])
+    target_locale = data.get('locale', 'es')
+    
+    try:
+        from website_builder.final_additions import i18n_system
+        
+        translations = {}
+        for string in strings:
+            translations[string] = i18n_system.auto_translate(string, target_locale)
+        
+        return jsonify({
+            "success": True,
+            "locale": target_locale,
+            "translations": translations
+        })
+    except Exception as e:
+        log.error(f"Translation error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/accessibility/check', methods=['POST'])
+def check_accessibility():
+    """Check HTML for accessibility compliance"""
+    data = request.get_json() or {}
+    html = data.get('html', '')
+    css = data.get('css', '')
+    
+    try:
+        from website_builder.final_additions import accessibility_checker
+        
+        result = accessibility_checker.check_html(html, css)
+        
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"Accessibility check error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/seo/analyze', methods=['POST'])
+def analyze_seo():
+    """Analyze page SEO"""
+    data = request.get_json() or {}
+    url = data.get('url', '/')
+    html = data.get('html', '')
+    
+    try:
+        from website_builder.final_additions import seo_optimizer
+        
+        analysis = seo_optimizer.analyze_page(url, html)
+        
+        return jsonify(analysis)
+    except Exception as e:
+        log.error(f"SEO analysis error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/seo/meta-tags', methods=['POST'])
+def generate_seo_meta_tags():
+    """Generate SEO meta tags"""
+    data = request.get_json() or {}
+    title = data.get('title', '')
+    description = data.get('description', '')
+    image = data.get('image')
+    url = data.get('url')
+    
+    try:
+        from website_builder.final_additions import seo_optimizer
+        
+        meta_tags = seo_optimizer.generate_meta_tags(title, description, image, url)
+        
+        return jsonify({
+            "success": True,
+            "meta_tags": meta_tags
+        })
+    except Exception as e:
+        log.error(f"SEO meta tags error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/media/image/validate', methods=['POST'])
+def validate_image_upload():
+    """Validate image upload"""
+    data = request.get_json() or {}
+    filename = data.get('filename', '')
+    size_bytes = data.get('size_bytes', 0)
+    mime_type = data.get('mime_type', '')
+    
+    try:
+        from website_builder.final_additions import image_upload
+        
+        validation = image_upload.validate_image(filename, size_bytes, mime_type)
+        
+        return jsonify(validation)
+    except Exception as e:
+        log.error(f"Image validation error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/media/video/validate', methods=['POST'])
+def validate_video_upload():
+    """Validate video upload"""
+    data = request.get_json() or {}
+    filename = data.get('filename', '')
+    size_bytes = data.get('size_bytes', 0)
+    mime_type = data.get('mime_type', '')
+    duration = data.get('duration_seconds')
+    
+    try:
+        from website_builder.final_additions import video_upload
+        
+        validation = video_upload.validate_video(filename, size_bytes, mime_type, duration)
+        
+        return jsonify(validation)
+    except Exception as e:
+        log.error(f"Video validation error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/builder/media/video/transcode-config', methods=['POST'])
+def get_video_transcode_config():
+    """Get video transcoding configuration"""
+    data = request.get_json() or {}
+    source_quality = data.get('source_quality', '1080p')
+    
+    try:
+        from website_builder.final_additions import video_upload
+        
+        config = video_upload.generate_transcode_config(source_quality)
+        
+        return jsonify(config)
+    except Exception as e:
+        log.error(f"Video transcode config error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# ==================== COMPLETE PLATFORM API ====================
+
+@app.route('/api/v1/chat/widget/code', methods=['POST'])
+def generate_chat_widget():
+    """Generate AI chat widget embed code"""
+    data = request.get_json() or {}
+    config = data.get('config', {})
+    
+    try:
+        from website_builder.complete_platform import ai_chat_widget
+        
+        widget = ai_chat_widget.generate_widget_code(config)
+        
+        return jsonify({
+            "success": True,
+            "html": widget['html'],
+            "css": widget['css'],
+            "js": widget['js'],
+            "full_embed": widget['full']
+        })
+    except Exception as e:
+        log.error(f"Chat widget error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/chat/widget/message', methods=['POST'])
+def chat_widget_message():
+    """Process chat widget message"""
+    data = request.get_json() or {}
+    session_id = data.get('session_id')
+    message = data.get('message')
+    context = data.get('context', '/')
+    
+    try:
+        from website_builder.complete_platform import ai_chat_widget
+        
+        result = ai_chat_widget.process_message(session_id, message, context)
+        
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"Chat message error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/analytics/tracking-script', methods=['POST'])
+def generate_analytics_script():
+    """Generate analytics tracking script"""
+    data = request.get_json() or {}
+    site_id = data.get('site_id', str(uuid.uuid4()))
+    
+    try:
+        from website_builder.complete_platform import analytics_dashboard
+        
+        script = analytics_dashboard.generate_tracking_script(site_id)
+        
+        return jsonify({
+            "success": True,
+            "site_id": site_id,
+            "script": script
+        })
+    except Exception as e:
+        log.error(f"Analytics script error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/analytics/track', methods=['POST'])
+def track_analytics_event():
+    """Track analytics event"""
+    data = request.get_json() or {}
+    
+    try:
+        from website_builder.complete_platform import analytics_dashboard
+        
+        result = analytics_dashboard.track_event(data)
+        
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"Analytics track error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/analytics/dashboard/<site_id>', methods=['GET'])
+def get_analytics_dashboard(site_id):
+    """Get analytics dashboard data"""
+    days = request.args.get('days', 30, type=int)
+    
+    try:
+        from website_builder.complete_platform import analytics_dashboard
+        
+        data = analytics_dashboard.get_dashboard_data(site_id, days)
+        
+        return jsonify(data)
+    except Exception as e:
+        log.error(f"Analytics dashboard error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/cms/collections', methods=['POST'])
+def create_cms_collection():
+    """Create CMS collection"""
+    data = request.get_json() or {}
+    name = data.get('name')
+    fields = data.get('fields', [])
+    
+    try:
+        from website_builder.complete_platform import cms_system
+        
+        result = cms_system.create_collection(name, fields)
+        
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"CMS collection error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/cms/collections/<collection_id>/entries', methods=['POST'])
+def create_cms_entry(collection_id):
+    """Create CMS entry"""
+    data = request.get_json() or {}
+    
+    try:
+        from website_builder.complete_platform import cms_system
+        
+        result = cms_system.create_entry(collection_id, data)
+        
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"CMS entry error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/ecommerce/products', methods=['POST'])
+def create_ecommerce_product():
+    """Create e-commerce product"""
+    data = request.get_json() or {}
+    
+    try:
+        from website_builder.complete_platform import ecommerce_system
+        
+        result = ecommerce_system.create_product(
+            name=data.get('name'),
+            price=data.get('price'),
+            description=data.get('description'),
+            images=data.get('images'),
+            category=data.get('category')
+        )
+        
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"E-commerce product error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/ecommerce/cart/add', methods=['POST'])
+def add_to_cart():
+    """Add item to cart"""
+    data = request.get_json() or {}
+    session_id = data.get('session_id') or request.cookies.get('session_id') or str(uuid.uuid4())
+    product_id = data.get('product_id')
+    quantity = data.get('quantity', 1)
+    
+    try:
+        from website_builder.complete_platform import ecommerce_system
+        
+        result = ecommerce_system.add_to_cart(session_id, product_id, quantity)
+        
+        response = jsonify(result)
+        response.set_cookie('session_id', session_id, max_age=30*24*60*60)
+        return response
+    except Exception as e:
+        log.error(f"Add to cart error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/ecommerce/cart', methods=['GET'])
+def get_cart():
+    """Get cart contents"""
+    session_id = request.cookies.get('session_id') or str(uuid.uuid4())
+    
+    try:
+        from website_builder.complete_platform import ecommerce_system
+        
+        result = ecommerce_system.get_cart(session_id)
+        
+        response = jsonify(result)
+        response.set_cookie('session_id', session_id, max_age=30*24*60*60)
+        return response
+    except Exception as e:
+        log.error(f"Get cart error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/forms/create', methods=['POST'])
+def create_form():
+    """Create dynamic form"""
+    data = request.get_json() or {}
+    name = data.get('name')
+    fields = data.get('fields', [])
+    
+    try:
+        from website_builder.complete_platform import forms_crm
+        
+        result = forms_crm.create_form(name, fields)
+        
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"Create form error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/forms/<form_id>/html', methods=['GET'])
+def get_form_html(form_id):
+    """Get form HTML"""
+    try:
+        from website_builder.complete_platform import forms_crm
+        
+        html = forms_crm.generate_form_html(form_id)
+        
+        return jsonify({"success": True, "html": html})
+    except Exception as e:
+        log.error(f"Form HTML error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/forms/<form_id>/submit', methods=['POST'])
+def submit_form(form_id):
+    """Submit form data"""
+    data = request.get_json() or {}
+    
+    try:
+        from website_builder.complete_platform import forms_crm
+        
+        result = forms_crm.submit_form(form_id, data)
+        
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"Form submit error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/blog/posts', methods=['POST'])
+def create_blog_post():
+    """Create blog post"""
+    data = request.get_json() or {}
+    
+    try:
+        from website_builder.complete_platform import blog_system
+        
+        result = blog_system.create_post(
+            title=data.get('title'),
+            content=data.get('content'),
+            author_id=data.get('author_id'),
+            category=data.get('category'),
+            tags=data.get('tags'),
+            status=data.get('status', 'draft')
+        )
+        
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"Blog post error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/blog/posts', methods=['GET'])
+def get_blog_posts():
+    """Get blog posts"""
+    category = request.args.get('category')
+    tag = request.args.get('tag')
+    limit = request.args.get('limit', 10, type=int)
+    
+    try:
+        from website_builder.complete_platform import blog_system
+        
+        result = blog_system.get_posts(category=category, tag=tag, limit=limit)
+        
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"Blog posts error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/search', methods=['GET'])
+def search_content():
+    """Search website content"""
+    query = request.args.get('q', '')
+    limit = request.args.get('limit', 10, type=int)
+    
+    try:
+        from website_builder.complete_platform import ai_search
+        
+        result = ai_search.search(query, limit)
+        
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"Search error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/search/widget', methods=['GET'])
+def get_search_widget():
+    """Get search widget code"""
+    try:
+        from website_builder.complete_platform import ai_search
+        
+        widget = ai_search.generate_search_widget()
+        
+        return jsonify({"success": True, "widget": widget})
+    except Exception as e:
+        log.error(f"Search widget error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/content/generate/blog', methods=['POST'])
+def generate_blog_content():
+    """Generate AI blog content"""
+    data = request.get_json() or {}
+    topic = data.get('topic')
+    keywords = data.get('keywords', [])
+    
+    try:
+        from website_builder.complete_platform import ai_content_generator
+        
+        result = ai_content_generator.generate_blog_post(topic, keywords)
+        
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"Content generation error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/content/generate/faq', methods=['POST'])
+def generate_faq_content():
+    """Generate FAQ content"""
+    data = request.get_json() or {}
+    topic = data.get('topic')
+    num_questions = data.get('num_questions', 5)
+    
+    try:
+        from website_builder.complete_platform import ai_content_generator
+        
+        result = ai_content_generator.generate_faq(topic, num_questions)
+        
+        return jsonify({"success": True, "faqs": result})
+    except Exception as e:
+        log.error(f"FAQ generation error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/cookie-consent/banner', methods=['POST'])
+def generate_cookie_banner():
+    """Generate cookie consent banner"""
+    data = request.get_json() or {}
+    config = data.get('config', {})
+    
+    try:
+        from website_builder.complete_platform import cookie_consent
+        
+        banner = cookie_consent.generate_consent_banner(config)
+        
+        return jsonify({"success": True, "banner": banner})
+    except Exception as e:
+        log.error(f"Cookie banner error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/pwa/manifest', methods=['POST'])
+def generate_pwa_manifest():
+    """Generate PWA manifest"""
+    data = request.get_json() or {}
+    
+    try:
+        from website_builder.complete_platform import pwa_system
+        
+        manifest = pwa_system.generate_manifest(data)
+        
+        return jsonify({"success": True, "manifest": manifest})
+    except Exception as e:
+        log.error(f"PWA manifest error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/pwa/service-worker', methods=['POST'])
+def generate_service_worker():
+    """Generate service worker"""
+    data = request.get_json() or {}
+    cache_urls = data.get('cache_urls')
+    
+    try:
+        from website_builder.complete_platform import pwa_system
+        
+        sw = pwa_system.generate_service_worker(cache_urls)
+        
+        return jsonify({"success": True, "service_worker": sw})
+    except Exception as e:
+        log.error(f"Service worker error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/workflows/triggers', methods=['GET'])
+def get_workflow_triggers():
+    """Get available workflow triggers"""
+    try:
+        from website_builder.complete_platform import workflow_automation
+        
+        triggers = workflow_automation.get_available_triggers()
+        
+        return jsonify({"success": True, "triggers": triggers})
+    except Exception as e:
+        log.error(f"Workflow triggers error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/v1/workflows/actions', methods=['GET'])
+def get_workflow_actions():
+    """Get available workflow actions"""
+    try:
+        from website_builder.complete_platform import workflow_automation
+        
+        actions = workflow_automation.get_available_actions()
+        
+        return jsonify({"success": True, "actions": actions})
+    except Exception as e:
+        log.error(f"Workflow actions error: {e}")
+        return jsonify({"error": str(e)}), 500
+
 # Error handlers
+
 @app.errorhandler(404)
 def not_found(error):
     return jsonify({"error": "Endpoint not found", "available": "/api/v1/"}), 404
@@ -1781,6 +5079,22 @@ if __name__ == "__main__":
     log.info(f"🤖 Multi-Agent System: 4 specialized agents with 1-minute analysis timeout")
     log.info(f"🔐 API Key System: Secure authentication with role-based access")
     log.info(f"🛡️ Execution Safety Layer: Pre-execution validation and auto-fallback enabled")
+    log.info(f"🔐 API Key System: Secure authentication with role-based access")
+    log.info(f"🛡️ Execution Safety Layer: Pre-execution validation and auto-fallback enabled")
+    log.info(f"📐 LaTeX Math Rendering: HTML/CSS math expressions")
+    log.info(f"🌐 Website Builder: 5 parallel agents for rapid development")
+    log.info(f"🧠 AI Training Engine: Self-learning with feedback loops")
+    
+    # Initialize AI Training Engine
+    try:
+        log.info("🧠 Initializing AI Training Engine...")
+        from ai_training_framework import training_engine, get_training_dashboard
+        stats = training_engine.get_training_statistics()
+        log.info(f"🧠 Training Engine: {stats['total_agents']} agents tracked")
+        log.info(f"🧠 Training Engine: {stats['total_queries_processed']} queries processed")
+        log.info(f"🧠 Training Dashboard: /api/v1/training/dashboard")
+    except Exception as e:
+        log.error(f"❌ Training engine initialization error: {e}")
     
     # Initialize API key system
     try:
@@ -1866,6 +5180,84 @@ if __name__ == "__main__":
         log.info(f"🔄 System Self-Modification: {len(default_params)} live parameters registered")
     except Exception as e:
         log.error(f"❌ Self-modification initialization error: {e}")
+    
+    # Initialize Autonomous Website Builder
+    try:
+        log.info("🤖 Initializing Autonomous Website Builder...")
+        from website_builder.autonomous_website_builder import autonomous_builder
+        log.info("🤖 Autonomous Builder: Self-contained AI ready")
+        log.info("   - Task decomposition: Enabled")
+        log.info("   - Self-correction: Enabled")
+        log.info("   - Real-time modification: Enabled")
+        log.info("   - Admin access: /admin/autonomous-builder")
+    except Exception as e:
+        log.error(f"❌ Autonomous builder initialization error: {e}")
+    
+    # Initialize POWERFUL Website Builder
+    try:
+        log.info("🚀 Initializing POWERFUL Website Builder...")
+        from website_builder.powerful_builder import powerful_builder
+        log.info("🚀 POWERFUL Builder: Ultimate AI ready")
+        log.info("   - 100+ Component Library: Loaded")
+        log.info("   - AI Layout Optimization: Enabled")
+        log.info("   - Advanced SEO Engine: Enabled")
+        log.info("   - Core Web Vitals Optimization: Enabled")
+        log.info("   - WCAG 2.1 AA Validator: Enabled")
+        log.info("   - Database Schema Generator: Enabled")
+        log.info("   - Max Agents: 7 parallel workers")
+        log.info("   - Admin access: /admin/autonomous-builder")
+    except Exception as e:
+        log.error(f"❌ POWERFUL builder initialization error: {e}")
+    
+    # Initialize UNIFIED AI Builder (Replaces Windsurf Assistant)
+    try:
+        log.info("🧠 Initializing UNIFIED AI Builder (Windsurf Replacement)...")
+        from website_builder.unified_ai_builder import unified_builder
+        log.info("🧠 UNIFIED Builder: AI Assistant + Website Builder + Code Intelligence")
+        log.info("   - Code Analysis: Python, JS, HTML, CSS")
+        log.info("   - Code Refactoring: Auto-modernization")
+        log.info("   - Smart Completions: AI-powered suggestions")
+        log.info("   - Thinking Process: Visible AI reasoning")
+        log.info("   - Multi-language Support: Enabled")
+        log.info("   - Template Library: 50+ code patterns")
+        log.info("   - Replaces: Windsurf AI Assistant")
+        log.info("   - Admin access: /admin/unified-builder")
+    except Exception as e:
+        log.error(f"❌ Unified builder initialization error: {e}")
+    
+    # Initialize BASE44/REPLIT COMPETITOR
+    try:
+        log.info("🚀 Initializing BASE44/REPLIT Competitor...")
+        from website_builder.base44_competitor import (
+            nl_parser, db_generator, auth_generator, 
+            deployment_system, collaboration_system, 
+            template_marketplace, preview_system, version_control
+        )
+        log.info("🚀 BASE44 Competitor: Full-Stack AI Development Platform")
+        log.info("   - Natural Language to App: Enabled")
+        log.info("   - Auto Database Schema: PostgreSQL, MySQL, MongoDB")
+        log.info("   - Auth System Generation: JWT, OAuth, MFA")
+        log.info("   - One-Click Deployment: Docker, K8s, AWS, GCP")
+        log.info("   - Real-Time Collaboration: Multiplayer editing")
+        log.info("   - Template Marketplace: 20+ production templates")
+        log.info("   - Live Preview: Hot reload WebSocket")
+        log.info("   - Version Control: Git + CI/CD")
+        log.info("   - Admin access: /admin/base44-builder")
+    except Exception as e:
+        log.error(f"❌ BASE44 competitor initialization error: {e}")
+    
+    # Initialize Server Reliability System
+    try:
+        log.info("🛡️ Initializing Server Reliability System...")
+        from server_reliability import start_reliability_monitoring
+        start_reliability_monitoring()
+        log.info("🛡️ Server Reliability: Active")
+        log.info("   - Health checks: Every 30s")
+        log.info("   - Auto-recovery: Enabled")
+        log.info("   - Metrics collection: Active")
+        log.info("   - Dashboard: /api/v1/reliability/dashboard")
+    except Exception as e:
+        log.error(f"❌ Server reliability initialization error: {e}")
     
     # Run production server
     # Use threaded=True for handling multiple concurrent requests

@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Visualization Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #111111;
+            --bg-tertiary: #1a1a1a;
+            --accent-blue: #3b82f6;
+            --text-primary: #ffffff;
+            --text-secondary: #a1a1aa;
+            --border-color: #27272a;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+        .header h1 {
+            background: linear-gradient(90deg, var(--accent-blue), #10b981);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+        .card-title {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+        }
+        .input-group {
+            margin-bottom: 1rem;
+        }
+        .input-label {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.4rem;
+        }
+        .input-field, .textarea-field {
+            width: 100%;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 0.6rem;
+            color: var(--text-primary);
+            font-family: inherit;
+        }
+        .textarea-field {
+            min-height: 80px;
+            font-family: monospace;
+        }
+        .btn {
+            padding: 0.6rem 1.2rem;
+            border: none;
+            border-radius: 6px;
+            background: var(--accent-blue);
+            color: white;
+            cursor: pointer;
+        }
+        .output-area {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            min-height: 100px;
+        }
+        @media (max-width: 1024px) {
+            .grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>AI Visualization Dashboard</h1>
+        <a href="/admin" style="color: var(--text-secondary);">Back to Admin</a>
+    </div>
+
+    <div class="grid">
+        <div class="card">
+            <h2 class="card-title">LaTeX Math Renderer</h2>
+            <div class="input-group">
+                <label class="input-label">LaTeX Expression</label>
+                <textarea class="textarea-field" id="latexInput">$$\frac{d}{dx}f(x) = \lim_{h \to 0}\frac{f(x+h) - f(x)}{h}$$</textarea>
+            </div>
+            <button class="btn" onclick="renderLatex()">Render Math</button>
+            <div class="output-area" id="latexOutput">Rendered math appears here...</div>
+        </div>
+
+        <div class="card">
+            <h2 class="card-title">Chart Generator</h2>
+            <div class="input-group">
+                <label class="input-label">Chart Type</label>
+                <select class="input-field" id="chartType">
+                    <option value="line">Line Chart</option>
+                    <option value="bar">Bar Chart</option>
+                </select>
+            </div>
+            <button class="btn" onclick="generateChart()">Generate Chart</button>
+            <div class="output-area" id="chartOutput">Chart appears here...</div>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top: 2rem;">
+        <h2 class="card-title">Physics Simulations</h2>
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-top: 1rem;">
+            <div class="card" onclick="createSimulation('particle')" style="cursor: pointer;">
+                <strong>Particle Physics</strong>
+                <p style="font-size: 0.8rem; color: var(--text-secondary);">Bouncing particles</p>
+            </div>
+            <div class="card" onclick="createSimulation('wave')" style="cursor: pointer;">
+                <strong>Wave Interference</strong>
+                <p style="font-size: 0.8rem; color: var(--text-secondary);">Superposition</p>
+            </div>
+            <div class="card" onclick="createSimulation('pendulum')" style="cursor: pointer;">
+                <strong>Double Pendulum</strong>
+                <p style="font-size: 0.8rem; color: var(--text-secondary);">Chaotic motion</p>
+            </div>
+            <div class="card" onclick="createSimulation('orbit')" style="cursor: pointer;">
+                <strong>Orbital Mechanics</strong>
+                <p style="font-size: 0.8rem; color: var(--text-secondary);">Planetary motion</p>
+            </div>
+        </div>
+        <div class="output-area" id="simOutput" style="margin-top: 1rem;">Simulation appears here...</div>
+    </div>
+
+    <script>
+        async function renderLatex() {
+            const latex = document.getElementById('latexInput').value;
+            const response = await fetch('/api/v1/latex/render', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ latex, display_mode: true })
+            });
+            const result = await response.json();
+            document.getElementById('latexOutput').innerHTML = result.html || result.error;
+        }
+
+        async function generateChart() {
+            const type = document.getElementById('chartType').value;
+            const data = {
+                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May'],
+                datasets: [{ label: 'Revenue', data: [100, 150, 120, 200, 180], color: '#3b82f6' }]
+            };
+            const response = await fetch('/api/v1/visualization/chart', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type, data, width: 600, height: 300 })
+            });
+            const result = await response.json();
+            document.getElementById('chartOutput').innerHTML = result.html || result.error;
+        }
+
+        async function createSimulation(type) {
+            const response = await fetch('/api/v1/visualization/simulation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type })
+            });
+            const result = await response.json();
+            document.getElementById('simOutput').innerHTML = result.html || result.error;
+        }
+    </script>
+</body>
+</html>
