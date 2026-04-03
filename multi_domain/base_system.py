@@ -32,6 +32,9 @@ class ConsensusResult:
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
     metadata: Dict[str, Any] = field(default_factory=dict)
 
+# Alias for backward compatibility
+DebateResult = ConsensusResult
+
 
 class BaseAgent:
     """Base class for all domain agents with self-learning capabilities"""

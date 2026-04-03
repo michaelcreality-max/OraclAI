@@ -313,23 +313,23 @@ class AppCard extends StatelessWidget {
         screens = {}
         for page in pages:
             screen_name = page.get('name', 'Home') + 'Screen.js'
-            screens[screen_name] = f'''
+            screen_code = '''
 import React from 'react';
-import {{ View, Text, StyleSheet, ScrollView }} from 'react-native';
-import {{ Button }} from '../components/Button';
+import { View, Text, ScrollView, StyleSheet, Button } from 'react-native';
 
-export const {page.get('name', 'Home')}Screen = () => (
+export const {}Screen = () => (
   <ScrollView style={styles.container}>
-    <Text style={styles.title}>{page.get('title', 'Home')}</Text>
-    <Button title="Get Started" onPress={() => {{}} />
+    <Text style={styles.title}>{}</Text>
+    <Button title="Get Started" onPress={() => {}} />
   </ScrollView>
 );
 
-const styles = StyleSheet.create({{
-  container: {{ flex: 1, padding: 16 }},
-  title: {{ fontSize: 24, fontWeight: 'bold', marginBottom: 16 }}
-}});
-'''
+const styles = StyleSheet.create({
+  container: { flex: 1, padding: 16 },
+  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 16 }
+});
+'''.format(page.get('name', 'Home'), page.get('title', 'Home'))
+            screens[screen_name] = screen_code
         if not screens:
             screens['HomeScreen.js'] = '''
 import React from 'react';
