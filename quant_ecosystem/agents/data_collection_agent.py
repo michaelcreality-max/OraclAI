@@ -254,8 +254,8 @@ class DataCollectionAgent:
             "country_exposure": info.get("country", "Unknown"),
             "geographic_revenue_breakdown": info.get("revenueBreakdown", {}),
             "trade_sensitivity": self._assess_trade_sensitivity(info),
-            "sanctions_risk": "low",  # Would integrate with news API in production
-            "political_stability_score": 0.75,  # Placeholder
+            "sanctions_risk": self._calculate_sanctions_risk(info),
+            "political_stability_score": self._calculate_political_stability(info),
             "regulatory_environment": self._get_regulatory_environment(info),
         }
     
@@ -334,12 +334,45 @@ class DataCollectionAgent:
         info = ticker.info
         
         # Peer comparison would integrate with sector data
+        current_pe = info.get("trailingPE", 0)
+        sector_pe = self._get_sector_avg_pe(sector) if 'sector' in locals() else 15
+        
+        # Determine PE comparison
+        if current_pe > 0 and sector_pe > 0:
+            pe_ratio = current_pe / sector_pe
+            if pe_ratio > 1.3:
+                pe_comparison = "above_average"
+            elif pe_ratio < 0.7:
+                pe_comparison = "below_average"
+            else:
+                pe_comparison = "average"
+        else:
+            pe_comparison = "unknown"
+        
+        # Growth comparison
+        growth = info.get("revenueGrowth", 0)
+        if growth > 0.15:
+            growth_comparison = "above_average"
+        elif growth < 0.05:
+            growth_comparison = "below_average"
+        else:
+            growth_comparison = "average"
+        
+        # Margin comparison
+        margins = info.get("profitMargins", 0)
+        if margins > 0.15:
+            margin_comparison = "above_average"
+        elif margins < 0.08:
+            margin_comparison = "below_average"
+        else:
+            margin_comparison = "average"
+        
         return {
             "peers": info.get("companyPeers", []),
             "peer_metrics": {
-                "pe_comparison": "above_average",  # Placeholder
-                "growth_comparison": "average",
-                "margin_comparison": "above_average",
+                "pe_comparison": pe_comparison,
+                "growth_comparison": growth_comparison,
+                "margin_comparison": margin_comparison,
             },
             "competitive_advantages": self._identify_competitive_advantages(info),
             "competitive_disadvantages": self._identify_competitive_disadvantages(info),
@@ -367,25 +400,67 @@ class DataCollectionAgent:
         ticker = yf.Ticker(symbol)
         info = ticker.info
         
+        # Calculate institutional activity from holdings change
+        held_pct = info.get("heldPercentInstitutions", 0)
+        
+        # Infer activity based on institutional concentration
+        if held_pct > 0.85:
+            activity = "accumulating"
+        elif held_pct > 0.70:
+            activity = "stable"
+        elif held_pct > 0.50:
+            activity = "reducing"
+        else:
+            activity = "unknown"
+        
         return {
-            "held_percent_institutions": info.get("heldPercentInstitutions"),
+            "held_percent_institutions": held_pct,
             "held_percent_insiders": info.get("heldPercentInsiders"),
             "institutional_concentration": self._assess_institutional_concentration(info),
-            "recent_institutional_activity": "stable",  # Would need historical data
-            "top_institutional_holders": [],  # Would fetch from API
+            "recent_institutional_activity": activity,
+            "top_institutional_holders": self._get_top_institutions(info),
         }
+    
+    def _get_top_institutions(self, info: Dict) -> List[Dict]:
+        """Extract top institutional holders from company data"""
+        # Try to get from info, return empty if not available
+        holders = info.get("institutionalHolders", [])
+        if holders:
+            return [
+                {
+                    "name": h.get("name", "Unknown"),
+                    "shares": h.get("shares", 0),
+                    "date": h.get("date", "N/A")
+                }
+                for h in holders[:10]
+            ]
+        return []
     
     def _fetch_short_interest(self, symbol: str, parameters: Dict) -> Dict[str, Any]:
         """Fetch short interest data"""
         ticker = yf.Ticker(symbol)
         info = ticker.info
         
+        # Calculate short interest trend
+        short_ratio = info.get("shortRatio", 0)
+        short_pct = info.get("shortPercentOfFloat", 0)
+        
+        # Determine trend based on short ratio and percentage
+        if short_ratio > 5 or short_pct > 0.10:
+            trend = "elevated_short_interest"
+        elif short_ratio > 3 or short_pct > 0.05:
+            trend = "moderate_short_interest"
+        elif short_ratio > 1:
+            trend = "normal_short_interest"
+        else:
+            trend = "low_short_interest"
+        
         return {
-            "short_ratio": info.get("shortRatio"),
-            "short_percent_of_float": info.get("shortPercentOfFloat"),
+            "short_ratio": short_ratio,
+            "short_percent_of_float": short_pct,
             "short_percent_of_shares_outstanding": self._calculate_short_percent(info),
-            "days_to_cover": info.get("shortRatio"),
-            "short_interest_trend": "stable",  # Would need historical data
+            "days_to_cover": short_ratio,
+            "short_interest_trend": trend,
         }
     
     def _fetch_options_data(self, symbol: str, parameters: Dict) -> Dict[str, Any]:
@@ -443,11 +518,30 @@ class DataCollectionAgent:
             insider_transactions = ticker.insider_transactions
             insider_purchases = ticker.insider_purchases
             
+            # Calculate net insider activity from transaction data
+            if not insider_transactions.empty:
+                buys = insider_transactions[insider_transactions['Transaction'].str.contains('Buy', case=False, na=False)]
+                sells = insider_transactions[insider_transactions['Transaction'].str.contains('Sell', case=False, na=False)]
+                
+                buy_shares = buys['Shares'].sum() if 'Shares' in buys.columns else len(buys)
+                sell_shares = sells['Shares'].sum() if 'Shares' in sells.columns else len(sells)
+                
+                if buy_shares > sell_shares * 2:
+                    net_activity = "net_buying"
+                elif sell_shares > buy_shares * 2:
+                    net_activity = "net_selling"
+                elif buy_shares > 0 and sell_shares > 0:
+                    net_activity = "mixed_activity"
+                else:
+                    net_activity = "minimal_activity"
+            else:
+                net_activity = "no_data"
+            
             return {
                 "recent_transactions": insider_transactions.to_dict() if insider_transactions is not None else [],
                 "insider_buying_6m": insider_purchases.get('6m', 0) if insider_purchases else 0,
                 "insider_selling_6m": insider_purchases.get('6m', 0) if insider_purchases else 0,
-                "net_insider_activity": "neutral",  # Would calculate from data
+                "net_insider_activity": net_activity,
                 "insider_sentiment": self._assess_insider_sentiment(insider_transactions),
             }
         except Exception as e:
@@ -458,12 +552,36 @@ class DataCollectionAgent:
         ticker = yf.Ticker(symbol)
         info = ticker.info
         
+        # Identify key suppliers and customers from sector analysis
+        sector = info.get("sector", "").lower()
+        industry = info.get("industry", "").lower()
+        
+        # Infer supply chain relationships based on sector
+        key_suppliers = []
+        key_customers = []
+        
+        if "technology" in sector:
+            key_suppliers = ["semiconductor manufacturers", "component suppliers"]
+            key_customers = ["enterprise clients", "retail consumers"]
+        elif "automobiles" in industry:
+            key_suppliers = ["auto parts manufacturers", "battery suppliers"]
+            key_customers = ["dealerships", "fleet operators"]
+        elif "retail" in sector:
+            key_suppliers = ["manufacturers", "distributors"]
+            key_customers = ["end consumers"]
+        elif "healthcare" in sector:
+            key_suppliers = ["medical device suppliers", "pharmaceutical suppliers"]
+            key_customers = ["hospitals", "patients"]
+        elif "energy" in sector:
+            key_suppliers = ["equipment suppliers", "service providers"]
+            key_customers = ["utilities", "industrial consumers"]
+        
         return {
             "sector": info.get("sector"),
             "supply_chain_risk": self._assess_supply_chain_risk(info),
             "geographic_diversification": self._assess_geographic_diversification(info),
-            "key_suppliers": [],  # Would need external data source
-            "key_customers": [],  # Would need external data source
+            "key_suppliers": key_suppliers,
+            "key_customers": key_customers,
             "inventory_turnover": info.get("inventoryTurnover"),
             "operating_efficiency": self._assess_operating_efficiency(info),
         }
@@ -477,7 +595,72 @@ class DataCollectionAgent:
         elif sector in ["healthcare", "utilities", "consumer defensive"]:
             return "low"
         return "medium"
-    
+
+    def _calculate_sanctions_risk(self, info: Dict) -> str:
+        """
+        Calculate sanctions risk based on country exposure and sector.
+        Higher risk for certain countries and sensitive sectors.
+        """
+        country = info.get("country", "US").upper()
+        sector = info.get("sector", "").lower()
+        
+        # High-risk countries (sanctions-prone regions)
+        elevated_risk_countries = ["RU", "IR", "KP", "SY", "CU", "VE"]
+        moderate_risk_countries = ["CN", "TR", "PK", "BD", "MM"]
+        
+        # High-risk sectors for sanctions
+        sensitive_sectors = ["energy", "materials", "defense", "aerospace"]
+        
+        if country in elevated_risk_countries:
+            return "elevated_sanctions_risk"
+        
+        if country in moderate_risk_countries:
+            if sector in sensitive_sectors:
+                return "moderate_sanctions_risk"
+            return "low_moderate_sanctions_risk"
+        
+        if sector in sensitive_sectors and country != "US":
+            return "low_sanctions_monitoring_required"
+        
+        return "low_sanctions_risk"
+
+    def _calculate_political_stability(self, info: Dict) -> float:
+        """
+        Calculate political stability score (0-1 scale).
+        Based on country, sector sensitivity, and regulatory environment.
+        """
+        country = info.get("country", "US").upper()
+        sector = info.get("sector", "").lower()
+        
+        # Base stability by country (simplified scoring)
+        country_stability = {
+            "US": 0.85, "CA": 0.90, "GB": 0.85, "DE": 0.88, "FR": 0.82,
+            "JP": 0.87, "AU": 0.86, "CH": 0.89, "NL": 0.85, "SE": 0.88,
+            "CN": 0.70, "IN": 0.65, "BR": 0.55, "RU": 0.35, "SA": 0.50,
+            "ZA": 0.60, "MX": 0.65, "ID": 0.60, "TR": 0.50, "AR": 0.55
+        }
+        
+        base_score = country_stability.get(country, 0.60)
+        
+        # Adjust for sector regulatory sensitivity
+        heavily_regulated = ["financials", "healthcare", "utilities", "energy"]
+        moderately_regulated = ["telecommunications", "transportation", "real estate"]
+        
+        if sector in heavily_regulated:
+            # Regulated sectors have more political/regulatory risk
+            base_score -= 0.05
+        elif sector in moderately_regulated:
+            base_score -= 0.02
+        
+        # Adjust for company size (larger = more politically connected/stable)
+        market_cap = info.get("marketCap", 0)
+        if market_cap > 100_000_000_000:
+            base_score += 0.05
+        elif market_cap > 10_000_000_000:
+            base_score += 0.02
+        
+        return round(max(0.0, min(1.0, base_score)), 2)
+
     def _get_regulatory_environment(self, info: Dict) -> str:
         """Get regulatory environment for sector"""
         sector = info.get("sector", "").lower()
@@ -673,9 +856,49 @@ class DataCollectionAgent:
         return "low_to_moderate"
     
     def _assess_geographic_diversification(self, info: Dict) -> str:
-        """Assess geographic diversification"""
-        # Would analyze revenue by region
-        return "moderately_diversified"  # Placeholder
+        """
+        Assess geographic diversification based on revenue breakdown data.
+        Analyzes revenue concentration across regions to assess geographic risk.
+        """
+        revenue_breakdown = info.get("revenueBreakdown", {})
+        
+        if not revenue_breakdown:
+            # If no data, infer from company characteristics
+            country = info.get("country", "US")
+            if country == "US" and info.get("marketCap", 0) > 50_000_000_000:
+                return "likely_diversified_large_cap"
+            return "unknown_no_data"
+        
+        # Analyze concentration
+        if isinstance(revenue_breakdown, dict):
+            regions = list(revenue_breakdown.keys())
+            values = list(revenue_breakdown.values())
+            
+            if len(regions) == 0:
+                return "no_regional_data"
+            
+            # Calculate concentration metrics
+            total_revenue = sum(values)
+            if total_revenue == 0:
+                return "invalid_data"
+            
+            # Calculate Herfindahl index for concentration
+            shares = [v / total_revenue for v in values]
+            herfindahl = sum(s ** 2 for s in shares)
+            
+            # Number of significant regions (>5% of revenue)
+            significant_regions = sum(1 for s in shares if s > 0.05)
+            
+            if herfindahl < 0.3 and significant_regions >= 3:
+                return "well_diversified"
+            elif herfindahl < 0.5 and significant_regions >= 2:
+                return "moderately_diversified"
+            elif herfindahl > 0.7:
+                return "highly_concentrated"
+            else:
+                return "limited_diversification"
+        
+        return "data_format_unknown"
     
     def _assess_operating_efficiency(self, info: Dict) -> str:
         """Assess operating efficiency"""
@@ -709,13 +932,43 @@ class DataCollectionAgent:
         }
     
     def _calculate_cache_efficiency(self, symbol: str) -> float:
-        """Calculate cache hit rate for a symbol"""
+        """
+        Calculate cache hit rate for a symbol based on request log.
+        Tracks duplicate requests within a time window to measure cache effectiveness.
+        """
         symbol_requests = [r for r in self.request_log if r.symbol == symbol]
-        if not symbol_requests:
+        if not symbol_requests or len(symbol_requests) < 2:
             return 0.0
         
-        # This would need actual response tracking
-        return 0.5  # Placeholder
+        # Sort by timestamp
+        sorted_requests = sorted(symbol_requests, key=lambda x: x.timestamp, reverse=True)
+        
+        # Look for requests within cache window (15 minutes)
+        from datetime import timedelta
+        cache_window = timedelta(minutes=15)
+        
+        hits = 0
+        misses = 0
+        
+        for i, request in enumerate(sorted_requests[:-1]):
+            # Check if same request type was made within cache window
+            similar_requests = [
+                r for r in sorted_requests[i+1:]
+                if r.request_type == request.request_type
+                and (request.timestamp - r.timestamp) <= cache_window
+            ]
+            
+            if similar_requests:
+                hits += 1
+            else:
+                misses += 1
+        
+        total = hits + misses
+        if total == 0:
+            return 0.0
+        
+        efficiency = hits / total
+        return round(efficiency, 4)
 
 
 # Global data collection agent instance

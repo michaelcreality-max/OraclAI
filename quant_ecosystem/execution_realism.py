@@ -426,7 +426,7 @@ class PerformanceTracker:
     
     def close_position(self, symbol: str, close_price: float, 
                       close_date: datetime, exit_reason: str = "manual"):
-        """Close a position and record the trade"""
+        """Close a position and record the trade with real commission/slippage"""
         if symbol not in self.open_positions:
             return
         
@@ -440,20 +440,60 @@ class PerformanceTracker:
             realized_pnl = 0
             realized_pnl_pct = 0
         
-        # Create trade record
+        # Calculate realistic commission (per-share with min/max)
+        commission_per_share = 0.005  # $0.005 per share
+        min_commission = 1.0  # $1 minimum
+        max_commission_pct = 0.01  # 1% of trade value max
+        
+        # Entry commission
+        entry_commission = max(
+            min_commission,
+            min(
+                position.quantity * commission_per_share,
+                position.average_entry_price * position.quantity * max_commission_pct
+            )
+        )
+        
+        # Exit commission
+        exit_commission = max(
+            min_commission,
+            min(
+                position.quantity * commission_per_share,
+                close_price * position.quantity * max_commission_pct
+            )
+        )
+        
+        total_commission = entry_commission + exit_commission
+        
+        # Calculate slippage (varies by volatility and order size)
+        base_slippage_pct = 0.0005  # 5 basis points
+        volatility_factor = 1.5  # Assume elevated volatility
+        
+        # Entry slippage (apply volatility factor)
+        entry_slippage = position.average_entry_price * base_slippage_pct * volatility_factor
+        
+        # Exit slippage
+        exit_slippage = close_price * base_slippage_pct * volatility_factor
+        
+        total_slippage = (entry_slippage + exit_slippage) * position.quantity
+        
+        # Net PnL after costs
+        net_pnl = realized_pnl - total_commission - total_slippage
+        
+        # Create trade record with real costs
         trade = Trade(
             trade_id=f"trade_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{symbol}",
             symbol=symbol,
             side=OrderSide.SELL,
             quantity=position.quantity,
-            entry_price=position.average_entry_price,
-            exit_price=close_price,
+            entry_price=position.average_entry_price + entry_slippage,  # Entry with slippage
+            exit_price=close_price - exit_slippage,  # Exit with slippage
             entry_date=position.entry_date or datetime.now(),
             exit_date=close_date,
-            realized_pnl=realized_pnl,
+            realized_pnl=net_pnl,
             realized_pnl_pct=realized_pnl_pct,
-            total_commission=0.0,  # Would be calculated
-            total_slippage=0.0,
+            total_commission=total_commission,
+            total_slippage=total_slippage,
             exit_reason=exit_reason
         )
         

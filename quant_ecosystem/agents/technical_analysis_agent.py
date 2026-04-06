@@ -217,12 +217,117 @@ class TechnicalAnalysisAgent:
             return {"regime": "normal_volatility", "confidence": 0.5}
     
     def _recognize_patterns(self, hist_1y: Dict) -> tuple:
-        """Recognize chart patterns"""
+        """
+        Recognize chart patterns using real price action analysis.
+        Detects: support/resistance, trendlines, breakouts, reversals
+        """
         score = 0
         signals = []
         
-        # Placeholder for pattern recognition
-        # In production, this would analyze actual price data
+        try:
+            closes = hist_1y.get("close_prices", [])
+            highs = hist_1y.get("high_prices", [])
+            lows = hist_1y.get("low_prices", [])
+            
+            if len(closes) < 30:
+                return score, signals
+            
+            # Find local maxima and minima (swing points)
+            swing_highs = []
+            swing_lows = []
+            
+            for i in range(2, len(highs) - 2):
+                # Swing high: higher than neighbors
+                if highs[i] > highs[i-1] and highs[i] > highs[i-2] and \
+                   highs[i] > highs[i+1] and highs[i] > highs[i+2]:
+                    swing_highs.append((i, highs[i]))
+                
+                # Swing low: lower than neighbors
+                if lows[i] < lows[i-1] and lows[i] < lows[i-2] and \
+                   lows[i] < lows[i+1] and lows[i] < lows[i+2]:
+                    swing_lows.append((i, lows[i]))
+            
+            # Pattern 1: Higher Highs + Higher Lows (Uptrend)
+            if len(swing_highs) >= 2 and len(swing_lows) >= 2:
+                recent_highs = swing_highs[-3:]
+                recent_lows = swing_lows[-3:]
+                
+                hhhl = all(recent_highs[i][1] > recent_highs[i-1][1] for i in range(1, len(recent_highs)))
+                hhll = all(recent_lows[i][1] > recent_lows[i-1][1] for i in range(1, len(recent_lows)))
+                
+                if hhhl and hhll:
+                    score += 2
+                    signals.append("Higher highs and higher lows - uptrend intact")
+                
+                # Pattern 2: Lower Highs + Lower Lows (Downtrend)
+                lhlh = all(recent_highs[i][1] < recent_highs[i-1][1] for i in range(1, len(recent_highs)))
+                lhll = all(recent_lows[i][1] < recent_lows[i-1][1] for i in range(1, len(recent_lows)))
+                
+                if lhlh and lhll:
+                    score -= 2
+                    signals.append("Lower highs and lower lows - downtrend intact")
+            
+            # Pattern 3: Double Bottom (Bullish reversal)
+            if len(swing_lows) >= 2:
+                last_two_lows = swing_lows[-2:]
+                price_diff = abs(last_two_lows[1][1] - last_two_lows[0][1])
+                avg_price = sum(closes) / len(closes)
+                tolerance = avg_price * 0.02  # 2% tolerance
+                
+                if price_diff < tolerance and last_two_lows[1][0] > last_two_lows[0][0] + 5:
+                    score += 3
+                    signals.append("Double bottom pattern detected - bullish reversal")
+            
+            # Pattern 4: Double Top (Bearish reversal)
+            if len(swing_highs) >= 2:
+                last_two_highs = swing_highs[-2:]
+                price_diff = abs(last_two_highs[1][1] - last_two_highs[0][1])
+                avg_price = sum(closes) / len(closes)
+                tolerance = avg_price * 0.02
+                
+                if price_diff < tolerance and last_two_highs[1][0] > last_two_highs[0][0] + 5:
+                    score -= 3
+                    signals.append("Double top pattern detected - bearish reversal")
+            
+            # Pattern 5: Triangle (Contraction)
+            if len(swing_highs) >= 3 and len(swing_lows) >= 3:
+                # Check if range is contracting
+                recent_range = swing_highs[-1][1] - swing_lows[-1][1]
+                prev_range = swing_highs[-3][1] - swing_lows[-3][1]
+                
+                if recent_range < prev_range * 0.7:  # 30% contraction
+                    signals.append("Triangle pattern - volatility contraction, breakout likely")
+            
+            # Pattern 6: Support/Resistance test
+            current_price = closes[-1]
+            recent_low_prices = [low for _, low in swing_lows[-5:]]
+            recent_high_prices = [high for _, high in swing_highs[-5:]]
+            
+            if recent_low_prices:
+                support_level = min(recent_low_prices)
+                if abs(current_price - support_level) / support_level < 0.01:
+                    if closes[-1] > closes[-3]:  # Bouncing off support
+                        score += 2
+                        signals.append("Price bouncing off support level")
+            
+            if recent_high_prices:
+                resistance_level = max(recent_high_prices)
+                if abs(current_price - resistance_level) / resistance_level < 0.01:
+                    if closes[-1] < closes[-3]:  # Rejected at resistance
+                        score -= 2
+                        signals.append("Price rejected at resistance level")
+            
+            # Pattern 7: Volume confirmation (if volume data available)
+            volumes = hist_1y.get("volumes", [])
+            if volumes and len(volumes) >= 20:
+                avg_volume = sum(volumes[-20:]) / 20
+                recent_volume = volumes[-1]
+                
+                if recent_volume > avg_volume * 1.5:  # 50% above average
+                    signals.append("High volume confirmation - trend strength")
+        
+        except Exception as e:
+            signals.append(f"Pattern analysis encountered issue: {str(e)}")
         
         return score, signals
     

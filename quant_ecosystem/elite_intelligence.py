@@ -23,19 +23,106 @@ from .regime import detect_regime, regime_strategy_weights
 from .schemas import RealityReport
 from .transparency import get_ledger
 from .world_context import world_context
-def _prediction_stub_from_ecosystem(eco: Dict[str, Any]) -> Dict[str, Any]:
+def _generate_real_prediction(eco: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Generate real prediction from ecosystem data using ensemble methods.
+    Calculates direction, confidence, and risk metrics from actual model performance.
+    """
     reps = eco.get("reality_reports") or []
+    survivors = eco.get("state", {}).get("survivors", [])
+    cycle = eco.get("cycle", 0)
+    
     if not reps:
-        return {"direction": "neutral", "confidence": 0.45, "sharpe_proxy": 0.0}
-    best = max(reps, key=lambda r: r.get("sharpe", -999))
-    sharpe = float(best.get("sharpe", 0.0))
-    passed = bool(best.get("passed"))
-    direction = "bullish" if sharpe > 0.4 and passed else "bearish" if sharpe < 0 else "neutral"
+        return {
+            "direction": "neutral",
+            "confidence": 0.45,
+            "sharpe_proxy": 0.0,
+            "signal_strength": 0.0,
+            "models_considered": 0,
+            "models_agreeing": 0,
+            "method": "default_no_data"
+        }
+    
+    # Filter to passed models only
+    passed_models = [r for r in reps if r.get("passed", False)]
+    
+    if not passed_models:
+        # No models passed - return neutral with low confidence
+        avg_sharpe = sum(r.get("sharpe", 0) for r in reps) / len(reps)
+        return {
+            "direction": "neutral",
+            "confidence": 0.35,
+            "sharpe_proxy": avg_sharpe,
+            "signal_strength": 0.0,
+            "models_considered": len(reps),
+            "models_agreeing": 0,
+            "method": "ensemble_no_passing_models",
+            "reason": "All models failed validation"
+        }
+    
+    # Calculate ensemble statistics
+    sharpes = [r.get("sharpe", 0.0) for r in passed_models]
+    pnls = [r.get("net_pnl_after_costs", 0.0) for r in passed_models]
+    drawdowns = [r.get("max_drawdown", 0.0) for r in passed_models]
+    
+    # Weight by Sharpe ratio (higher Sharpe = more weight)
+    total_sharpe = sum(max(0, s) for s in sharpes) or 1.0
+    weights = [max(0, s) / total_sharpe for s in sharpes]
+    
+    # Weighted average metrics
+    weighted_sharpe = sum(s * w for s, w in zip(sharpes, weights))
+    weighted_pnl = sum(p * w for p, w in zip(pnls, weights))
+    avg_drawdown = sum(drawdowns) / len(drawdowns) if drawdowns else 0
+    
+    # Determine direction based on weighted PnL and Sharpe
+    if weighted_sharpe > 0.5 and weighted_pnl > 0:
+        direction = "bullish"
+        signal_strength = min(1.0, weighted_sharpe * 0.5 + abs(weighted_pnl) * 0.001)
+    elif weighted_sharpe < -0.2 or weighted_pnl < -0.05:
+        direction = "bearish"
+        signal_strength = min(1.0, abs(weighted_sharpe) * 0.5 + abs(weighted_pnl) * 0.001)
+    else:
+        direction = "neutral"
+        signal_strength = abs(weighted_sharpe) * 0.3
+    
+    # Calculate confidence based on model agreement
+    bullish_count = sum(1 for r in passed_models if r.get("sharpe", 0) > 0.3)
+    bearish_count = sum(1 for r in passed_models if r.get("sharpe", 0) < -0.1)
+    total_passed = len(passed_models)
+    
+    if direction == "bullish":
+        agreement_ratio = bullish_count / total_passed if total_passed > 0 else 0
+    elif direction == "bearish":
+        agreement_ratio = bearish_count / total_passed if total_passed > 0 else 0
+    else:
+        neutral_count = total_passed - bullish_count - bearish_count
+        agreement_ratio = neutral_count / total_passed if total_passed > 0 else 0
+    
+    # Confidence calculation considers both signal strength and model agreement
+    base_confidence = 0.4 + (signal_strength * 0.4) + (agreement_ratio * 0.2)
+    confidence = min(0.95, max(0.3, base_confidence))
+    
+    # Select best model for reference
+    best_model = max(passed_models, key=lambda r: r.get("sharpe", -999))
+    
     return {
         "direction": direction,
-        "confidence": min(0.95, 0.5 + abs(sharpe) * 0.1),
-        "sharpe_proxy": sharpe,
-        "best_model": best.get("model_id"),
+        "confidence": round(confidence, 4),
+        "sharpe_proxy": round(weighted_sharpe, 4),
+        "signal_strength": round(signal_strength, 4),
+        "weighted_pnl": round(weighted_pnl, 4),
+        "avg_drawdown": round(avg_drawdown, 4),
+        "models_considered": len(reps),
+        "models_passed": len(passed_models),
+        "models_agreeing": int(agreement_ratio * total_passed),
+        "agreement_ratio": round(agreement_ratio, 4),
+        "cycle": cycle,
+        "method": "weighted_ensemble",
+        "best_model": {
+            "model_id": best_model.get("model_id"),
+            "sharpe": best_model.get("sharpe"),
+            "hypothesis_id": best_model.get("hypothesis_id")
+        }
     }
 
 
@@ -112,7 +199,7 @@ def run_full_intelligence(
         if kill.evaluate(rep.model_id, rep):
             killed[rep.model_id] = kill.kill_reasons.get(rep.model_id, "killed")
 
-    pred_summary = _prediction_stub_from_ecosystem(eco)
+    pred_summary = _generate_real_prediction(eco)
     risk_metrics = {
         "max_drawdown_proxy": min([r.get("max_drawdown", 0) for r in eco.get("reality_reports") or []] or [0]),
         "sharpe_proxy": pred_summary.get("sharpe_proxy"),
