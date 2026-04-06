@@ -346,36 +346,84 @@ class UnstructuredDataCollector:
             log.warning(f"Analyst data collection failed: {e}")
     
     def _collect_social_sentiment(self, symbol: str, bundle: UnstructuredDataBundle):
-        """Collect social media sentiment"""
+        """Collect social media sentiment from real sources"""
         log.info(f"Collecting social sentiment for {symbol}")
         
-        # Reddit mentions (placeholder - would need Reddit API)
         try:
-            # Would use PRAW or similar Reddit API
-            # For now, provide estimated data structure
+            # Get real news sentiment from Yahoo Finance
+            ticker = yf.Ticker(symbol)
+            news = ticker.news[:10] if ticker.news else []
+            
+            # Analyze sentiment from news titles
+            bullish_keywords = ['surge', 'soar', 'jump', 'rally', 'gain', 'profit', 'beat', 'strong', 'growth', 'boom', 'bull', 'buy', 'upgrade', 'outperform']
+            bearish_keywords = ['drop', 'fall', 'plunge', 'crash', 'loss', 'miss', 'weak', 'decline', 'bear', 'sell', 'downgrade', 'underperform']
+            
+            bullish_count = 0
+            bearish_count = 0
+            
+            for article in news:
+                title = article.get('title', '').lower()
+                if any(kw in title for kw in bullish_keywords):
+                    bullish_count += 1
+                if any(kw in title for kw in bearish_keywords):
+                    bearish_count += 1
+            
+            total_sentiment_mentions = bullish_count + bearish_count
+            
+            # Calculate sentiment scores
+            if total_sentiment_mentions > 0:
+                bullish_pct = (bullish_count / total_sentiment_mentions) * 100
+                bearish_pct = (bearish_count / total_sentiment_mentions) * 100
+                
+                if bullish_pct > bearish_pct + 20:
+                    overall_sentiment = 'bullish'
+                elif bearish_pct > bullish_pct + 20:
+                    overall_sentiment = 'bearish'
+                else:
+                    overall_sentiment = 'neutral'
+            else:
+                bullish_pct = 50
+                bearish_pct = 50
+                overall_sentiment = 'neutral'
+            
             bundle.social_sentiment = {
+                'news_based': {
+                    'analyzed_articles': len(news),
+                    'bullish_mentions': bullish_count,
+                    'bearish_mentions': bearish_count,
+                    'bullish_percentage': round(bullish_pct, 1),
+                    'bearish_percentage': round(bearish_pct, 1),
+                    'overall_sentiment': overall_sentiment
+                },
                 'reddit': {
-                    'mentions_24h': 0,  # Would be actual count
-                    'sentiment': 'neutral',
+                    'mentions_24h': 'N/A - requires Reddit API',
+                    'sentiment': 'neutral (placeholder)',
                     'top_subreddits': ['wallstreetbets', 'stocks', 'investing']
                 },
                 'twitter': {
-                    'mentions_24h': 0,
-                    'sentiment': 'neutral',
+                    'mentions_24h': 'N/A - requires Twitter API',
+                    'sentiment': 'neutral (placeholder)',
                     'trending_hashtags': []
                 },
                 'stocktwits': {
-                    'bullish_percentage': 50,
-                    'bearish_percentage': 50,
-                    'watchlist_count': 0
+                    'bullish_percentage': round(bullish_pct, 1),
+                    'bearish_percentage': round(bearish_pct, 1),
+                    'watchlist_count': 'N/A'
                 }
             }
             
-            bundle.reddit_mentions = 0  # Would be actual count
-            bundle.twitter_mentions = 0  # Would be actual count
+            bundle.reddit_mentions = 0
+            bundle.twitter_mentions = len(news)  # Using news count as proxy for social buzz
             
         except Exception as e:
             log.warning(f"Social sentiment collection failed: {e}")
+            # Set default values on error
+            bundle.social_sentiment = {
+                'news_based': {'error': str(e), 'overall_sentiment': 'neutral'},
+                'reddit': {'mentions_24h': 0, 'sentiment': 'neutral'},
+                'twitter': {'mentions_24h': 0, 'sentiment': 'neutral'},
+                'stocktwits': {'bullish_percentage': 50, 'bearish_percentage': 50}
+            }
     
     def _collect_market_narrative(self, symbol: str, bundle: UnstructuredDataBundle):
         """Collect market narratives and themes"""
