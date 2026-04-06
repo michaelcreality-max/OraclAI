@@ -1,4 +1,4 @@
-"""Feature builders: technical, sentiment placeholders, cross-asset."""
+"""Feature builders: technical, sentiment from real news, cross-asset."""
 
 from __future__ import annotations
 
@@ -6,16 +6,17 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
+import yfinance as yf
 
 
 def build_feature_matrix(
     ohlcv: pd.DataFrame,
     ref_close: Optional[pd.Series] = None,
+    symbol: Optional[str] = None,
 ) -> pd.DataFrame:
     """
     Build a wide matrix of base features. Columns are used by genetic search
-    and model training. Sentiment_* columns are placeholders (zeros) for
-    wiring in external NLP feeds later.
+    and model training. Sentiment_* columns now use real news data when symbol is provided.
     """
     df = ohlcv.copy()
     c = df["close"]
@@ -41,13 +42,78 @@ def build_feature_matrix(
         out["beta_proxy"] = 0.0
         out["rel_strength"] = 0.0
 
-    # Placeholders for sentiment / alt data (replace with real series in production)
-    out["sentiment_news"] = 0.0
+    # Real sentiment from Yahoo Finance news when symbol is provided
+    if symbol:
+        try:
+            sentiment_data = _calculate_news_sentiment(symbol)
+            out["sentiment_news"] = sentiment_data.get('score', 0.0)
+            out["sentiment_bullish_pct"] = sentiment_data.get('bullish_pct', 50.0) / 100.0
+            out["sentiment_articles_analyzed"] = sentiment_data.get('articles', 0)
+        except Exception:
+            out["sentiment_news"] = 0.0
+            out["sentiment_bullish_pct"] = 0.5
+            out["sentiment_articles_analyzed"] = 0
+    else:
+        out["sentiment_news"] = 0.0
+        out["sentiment_bullish_pct"] = 0.5
+        out["sentiment_articles_analyzed"] = 0
+    
+    # Social sentiment placeholder (requires social media APIs)
     out["sentiment_social"] = 0.0
     out["sentiment_options"] = 0.0
 
     out = out.replace([np.inf, -np.inf], np.nan).dropna()
     return out
+
+
+def _calculate_news_sentiment(symbol: str) -> dict:
+    """Calculate sentiment score from Yahoo Finance news articles"""
+    try:
+        ticker = yf.Ticker(symbol)
+        news = ticker.news[:20] if ticker.news else []
+        
+        if not news:
+            return {'score': 0.0, 'bullish_pct': 50.0, 'articles': 0}
+        
+        # Sentiment keywords
+        bullish_words = ['surge', 'soar', 'jump', 'rally', 'gain', 'profit', 'beat', 'strong', 
+                        'growth', 'boom', 'bull', 'buy', 'upgrade', 'outperform', 'exceed']
+        bearish_words = ['drop', 'fall', 'plunge', 'crash', 'loss', 'miss', 'weak', 'decline',
+                        'bear', 'sell', 'downgrade', 'underperform', 'miss', 'cut']
+        
+        scores = []
+        bullish_count = 0
+        bearish_count = 0
+        
+        for article in news:
+            title = article.get('title', '').lower()
+            
+            b_count = sum(1 for w in bullish_words if w in title)
+            be_count = sum(1 for w in bearish_words if w in title)
+            
+            if b_count > be_count:
+                scores.append(1.0)
+                bullish_count += 1
+            elif be_count > b_count:
+                scores.append(-1.0)
+                bearish_count += 1
+            else:
+                scores.append(0.0)
+        
+        # Normalize to -1 to 1 scale
+        avg_score = sum(scores) / len(scores) if scores else 0.0
+        bullish_pct = (bullish_count / len(news)) * 100 if news else 50.0
+        
+        return {
+            'score': avg_score,
+            'bullish_pct': bullish_pct,
+            'articles': len(news),
+            'bullish_count': bullish_count,
+            'bearish_count': bearish_count
+        }
+        
+    except Exception:
+        return {'score': 0.0, 'bullish_pct': 50.0, 'articles': 0}
 
 
 def _rsi(close: pd.Series, window: int) -> pd.Series:
