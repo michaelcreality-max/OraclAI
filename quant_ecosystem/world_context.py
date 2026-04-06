@@ -118,6 +118,9 @@ def world_context(symbol: str) -> Dict[str, Any]:
     # Get real news from Yahoo Finance
     news_data = fetch_yahoo_finance_news(sym)
     
+    # Get real market context data
+    macro_events = _get_market_context(sym)
+    
     out: Dict[str, Any] = {
         "symbol": sym,
         "news": news_data,
@@ -126,12 +129,11 @@ def world_context(symbol: str) -> Dict[str, Any]:
             "interpretation": interpret_sentiment(news_data['sentiment_estimate']),
             "based_on": f"{news_data['count']} headlines"
         },
-        "macro_events": [
-            {"type": "placeholder", "description": "Wire FRED / calendar API for CPI, FOMC, NFP."},
-        ],
+        "macro_events": macro_events,
         "earnings_nlp": {
-            "status": "not_configured",
-            "hint": "Transcribe earnings calls and run sentiment + factor tagging offline.",
+            "status": "available" if news_data.get('earnings_date') else "not_configured",
+            "next_earnings": news_data.get('earnings_date', 'N/A'),
+            "hint": "Use news-based sentiment as proxy for earnings sentiment"
         },
         "timestamp": datetime.now().isoformat()
     }
@@ -143,6 +145,89 @@ def world_context(symbol: str) -> Dict[str, Any]:
         out["rss_source"] = rss
     
     return out
+
+
+def _get_market_context(symbol: str) -> List[Dict[str, Any]]:
+    """Get real market context data from Yahoo Finance"""
+    try:
+        ticker = yf.Ticker(symbol)
+        info = ticker.info
+        
+        events = []
+        
+        # Market status
+        market_state = info.get('marketState', 'unknown')
+        events.append({
+            "type": "market_status",
+            "state": market_state,
+            "exchange": info.get('exchange', 'N/A'),
+            "currency": info.get('currency', 'USD')
+        })
+        
+        # Volatility context
+        beta = info.get('beta', 1.0)
+        volatility_level = "high" if beta > 1.5 else "low" if beta < 0.8 else "normal"
+        events.append({
+            "type": "volatility_context",
+            "beta": beta,
+            "level": volatility_level,
+            "market_sensitivity": f"{beta:.2f}x market moves"
+        })
+        
+        # Earnings context
+        earnings_date = info.get('earningsDate')
+        if earnings_date:
+            if isinstance(earnings_date, list) and len(earnings_date) > 0:
+                next_earnings = earnings_date[0]
+            else:
+                next_earnings = earnings_date
+            events.append({
+                "type": "earnings_event",
+                "date": str(next_earnings) if next_earnings else "N/A",
+                "event": "Upcoming earnings announcement"
+            })
+        
+        # Dividend context
+        dividend_yield = info.get('dividendYield', 0)
+        if dividend_yield and dividend_yield > 0:
+            events.append({
+                "type": "dividend_context",
+                "yield_percent": round(dividend_yield * 100, 2),
+                "event": "Dividend-paying stock"
+            })
+        
+        # Price context
+        current_price = info.get('currentPrice', info.get('regularMarketPrice', 0))
+        fifty_two_week_high = info.get('fiftyTwoWeekHigh', 0)
+        fifty_two_week_low = info.get('fiftyTwoWeekLow', 0)
+        
+        if current_price and fifty_two_week_high and fifty_two_week_low:
+            price_range_pct = ((current_price - fifty_two_week_low) / 
+                             (fifty_two_week_high - fifty_two_week_low) * 100) if fifty_two_week_high != fifty_two_week_low else 50
+            
+            position_desc = "near highs" if price_range_pct > 80 else "near lows" if price_range_pct < 20 else "mid-range"
+            
+            events.append({
+                "type": "price_context",
+                "current_price": current_price,
+                "52w_range": f"${fifty_two_week_low:.2f} - ${fifty_two_week_high:.2f}",
+                "position_in_range": f"{price_range_pct:.1f}% ({position_desc})"
+            })
+        
+        # Analyst consensus
+        recommendation = info.get('recommendationKey', 'none')
+        if recommendation and recommendation != 'none':
+            events.append({
+                "type": "analyst_consensus",
+                "recommendation": recommendation,
+                "target_price": info.get('targetMeanPrice', 'N/A'),
+                "num_analysts": info.get('numberOfAnalystOpinions', 'N/A')
+            })
+        
+        return events
+        
+    except Exception as e:
+        return [{"type": "error", "message": f"Could not fetch market context: {e}"}]
 
 
 def interpret_sentiment(score: float) -> str:
