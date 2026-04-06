@@ -288,16 +288,64 @@ class MultiAgentOrchestrator:
             def run_risk():
                 tracker.update_agent_status("risk", "analyzing", {"start_time": time.time()})
                 try:
-                    # Risk agent analyzes independently
-                    bull_placeholder = {"confidence": 0.5, "key_points": []}
-                    bear_placeholder = {"confidence": 0.5, "key_points": []}
+                    # Generate real bull/bear cases from technical data
+                    from .data import load_ohlcv
+                    from .features import build_feature_matrix
                     
-                    result = risk_agent.analyze(symbol, initial_data, bull_placeholder, 
-                                              bear_placeholder, financial_context)
+                    ohlcv, ref = load_ohlcv(symbol)
+                    close = ohlcv['close']
+                    
+                    # Calculate real technical signals for bull/bear case
+                    sma_20 = close.rolling(20).mean().iloc[-1]
+                    sma_50 = close.rolling(50).mean().iloc[-1]
+                    current_price = close.iloc[-1]
+                    
+                    # RSI calculation
+                    delta = close.diff()
+                    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+                    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+                    rs = gain / loss
+                    rsi = 100 - (100 / (1 + rs))
+                    current_rsi = rsi.iloc[-1]
+                    
+                    # Trend determination
+                    trend_bullish = current_price > sma_20 > sma_50
+                    trend_bearish = current_price < sma_20 < sma_50
+                    
+                    # Build real bull case
+                    bull_case = {
+                        "confidence": 0.75 if trend_bullish else 0.45,
+                        "key_points": [
+                            f"Price ${current_price:.2f} {'above' if current_price > sma_20 else 'below'} 20-day MA (${sma_20:.2f})",
+                            f"RSI at {current_rsi:.1f} - {'neutral zone' if 30 <= current_rsi <= 70 else 'extreme'}" if not trend_bullish else f"RSI {current_rsi:.1f} supports momentum",
+                            f"50-day MA trend: {'rising' if sma_50 > sma_50 * 0.98 else 'flat/declining'}"
+                        ] if trend_bullish else [
+                            "Technical indicators not strongly bullish",
+                            f"Price needs to break above ${sma_20:.2f} for bullish confirmation"
+                        ]
+                    }
+                    
+                    # Build real bear case
+                    bear_case = {
+                        "confidence": 0.75 if trend_bearish else 0.45,
+                        "key_points": [
+                            f"Price ${current_price:.2f} {'below' if current_price < sma_20 else 'above'} 20-day MA (${sma_20:.2f})",
+                            f"RSI at {current_rsi:.1f} - {'oversold bounce possible' if current_rsi < 30 else 'neutral/bearish'}" if trend_bearish else f"RSI {current_rsi:.1f} not confirming bearish momentum",
+                            f"Support level: ${sma_50:.2f} (50-day MA)"
+                        ] if trend_bearish else [
+                            "Technical indicators not strongly bearish",
+                            f"Price holding above ${sma_50:.2f} support"
+                        ]
+                    }
+                    
+                    result = risk_agent.analyze(symbol, initial_data, bull_case, 
+                                              bear_case, financial_context)
                     agent_results["risk"] = result
                     tracker.log_agent_argument("risk", {
                         "risk_score": result.risk_score,
-                        "risk_level": result.risk_level
+                        "risk_level": result.risk_level,
+                        "bull_confidence": bull_case["confidence"],
+                        "bear_confidence": bear_case["confidence"]
                     }, 1)
                 except Exception as e:
                     log.error(f"Risk agent error: {e}")
