@@ -258,13 +258,44 @@ def get_personalization_context():
 def get_all_users_summary():
     """
     Get summary of all users (Admin only).
+    Returns actual user data from memory system.
     """
-    # This would require listing all users from the API key system
-    # For now, return a placeholder
-    return jsonify({
-        "success": True,
-        "message": "User summaries would be listed here from API key manager"
-    })
+    try:
+        # Get all user profiles from memory
+        all_users = []
+        for user_id in list(user_memory.user_data.keys())[:100]:  # Limit to 100 users
+            profile = user_memory.get_user_profile(user_id)
+            if profile:
+                # Get user's portfolio value
+                positions = user_memory.get_portfolio_positions(user_id)
+                total_value = sum(p.market_value for p in positions) if positions else 0
+                
+                # Get trade stats
+                trades = user_memory.get_user_trades(user_id, limit=1000)
+                open_trades = sum(1 for t in trades if t.status.value == 'open')
+                
+                all_users.append({
+                    'user_id': user_id[:8] + '...',  # Truncated for security
+                    'risk_appetite': profile.risk_appetite.value,
+                    'preferred_timeframe': profile.preferred_timeframe,
+                    'total_positions': len(positions),
+                    'portfolio_value': round(total_value, 2),
+                    'total_trades': len(trades),
+                    'open_trades': open_trades,
+                    'last_active': profile.last_updated.isoformat() if profile.last_updated else None
+                })
+        
+        return jsonify({
+            "success": True,
+            "user_count": len(all_users),
+            "users": all_users
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "message": "Failed to retrieve user summaries"
+        }), 500
 
 
 @user_routes.route('/admin/trades', methods=['GET'])
@@ -272,11 +303,44 @@ def get_all_users_summary():
 def get_all_trades():
     """
     Get all trades across all users (Admin only).
+    Returns actual trade data from memory system.
     """
-    return jsonify({
-        "success": True,
-        "message": "All trades would be listed here"
-    })
+    try:
+        all_trades = []
+        
+        # Get trades from all users (limit for performance)
+        for user_id in list(user_memory.user_data.keys())[:50]:
+            trades = user_memory.get_user_trades(user_id, limit=100)
+            for trade in trades:
+                all_trades.append({
+                    'trade_id': trade.trade_id,
+                    'user_id': user_id[:8] + '...',
+                    'symbol': trade.symbol,
+                    'direction': trade.direction.value,
+                    'entry_price': trade.entry_price,
+                    'shares': trade.shares,
+                    'position_value': trade.position_value,
+                    'status': trade.status.value,
+                    'entry_time': trade.entry_time.isoformat() if trade.entry_time else None,
+                    'strategy': trade.strategy,
+                    'confidence': trade.confidence,
+                    'pnl': trade.pnl if trade.pnl else None
+                })
+        
+        # Sort by entry time, most recent first
+        all_trades.sort(key=lambda x: x.get('entry_time', ''), reverse=True)
+        
+        return jsonify({
+            "success": True,
+            "trade_count": len(all_trades),
+            "trades": all_trades[:100]  # Limit to 100 most recent
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "message": "Failed to retrieve trades"
+        }), 500
 
 
 # ==================== TRADE RECORDING ENDPOINTS ====================
