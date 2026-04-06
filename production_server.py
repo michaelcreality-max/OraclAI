@@ -2253,7 +2253,9 @@ def admin_autonomous_history():
                     "build_time": h.build_time,
                     "validation_score": h.validation_score,
                     "files": list(h.files.keys()),
-                    "timestamp": datetime.now().isoformat()  # Would be stored in real implementation
+                    "timestamp": getattr(h, 'timestamp', datetime.now().isoformat()),
+                    "build_date": getattr(h, 'build_date', datetime.now().strftime('%Y-%m-%d %H:%M'))
+                }
                 }
                 for h in history[-20:]  # Last 20 builds
             ]
@@ -5462,7 +5464,8 @@ def generate_website():
                 "can_run": result['can_run'],
                 "instructions": result['instructions'],
                 "download_ready": True,
-                "preview_url": None  # Would need file storage for preview
+                "preview_url": f"/api/v1/website/preview/{result['analysis']['company_name'].replace(' ', '-').lower()}" if result['files'].get('index.html') else None,
+                "files_html": result['files'].get('index.html', '')[:5000]  # First 5KB for inline preview
             })
         else:
             return jsonify({
