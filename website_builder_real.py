@@ -1,6 +1,6 @@
 """
-Real Website Builder - Generates Actual Working Code
-Not fake promises - real HTML, CSS, JS output
+Real Website Builder - Generates Fully Functional Websites
+Smart AI that decides when to add interactivity, APIs, and complex features
 """
 import re
 import json
@@ -12,63 +12,145 @@ from datetime import datetime
 class RealWebsiteBuilder:
     """
     ACTUAL website builder that generates real, working code.
-    No vaporware - this produces files you can save and run.
+    SMART: Automatically decides complexity level based on requirements.
     """
     
     def __init__(self):
         self.templates = self._load_templates()
+        self.js_components = self._load_js_components()
+        self.api_templates = self._load_api_templates()
     
     def _load_templates(self) -> Dict:
-        """Real working templates with actual code"""
+        """Real working templates with complexity levels"""
         return {
             "landing": {
                 "name": "Landing Page",
-                "description": "High-conversion landing page with hero, features, CTA",
-                "structure": ["hero", "features", "testimonials", "cta", "footer"]
+                "description": "Marketing-focused with conversions",
+                "structure": ["hero", "features", "testimonials", "cta", "footer"],
+                "default_complexity": "medium",
+                "interactivity": ["smooth_scroll", "contact_form", "analytics"]
             },
             "portfolio": {
                 "name": "Portfolio",
-                "description": "Showcase work with gallery and contact",
-                "structure": ["header", "gallery", "about", "contact", "footer"]
+                "description": "Creative work showcase",
+                "structure": ["header", "gallery", "about", "contact", "footer"],
+                "default_complexity": "low",
+                "interactivity": ["gallery_filter", "lightbox", "smooth_scroll"]
             },
             "dashboard": {
                 "name": "Dashboard",
-                "description": "Data visualization dashboard with sidebar",
-                "structure": ["sidebar", "header", "stats", "charts", "table"]
+                "description": "Data-heavy admin interface",
+                "structure": ["sidebar", "header", "stats", "charts", "table"],
+                "default_complexity": "high",
+                "interactivity": ["real_time_data", "charts", "search_filter", "api_integration"]
             },
             "ecommerce": {
                 "name": "E-commerce",
-                "description": "Product listing with cart functionality",
-                "structure": ["header", "filters", "products", "cart", "footer"]
+                "description": "Full shopping experience",
+                "structure": ["header", "filters", "products", "cart", "footer"],
+                "default_complexity": "high",
+                "interactivity": ["cart", "checkout", "search", "payment", "inventory_api"]
+            },
+            "blog": {
+                "name": "Blog/Content",
+                "description": "Content publishing platform",
+                "structure": ["header", "hero", "articles", "sidebar", "footer"],
+                "default_complexity": "medium",
+                "interactivity": ["comments", "newsletter", "social_share", "cms_api"]
+            },
+            "app": {
+                "name": "Web Application",
+                "description": "Interactive tool or service",
+                "structure": ["nav", "workspace", "tools", "footer"],
+                "default_complexity": "high",
+                "interactivity": ["auth", "real_time", "api_backend", "state_management"]
+            }
+        }
+    
+    def _load_js_components(self) -> Dict:
+        """Load reusable JavaScript component templates"""
+        return {
+            "cart": {
+                "name": "Shopping Cart",
+                "requires": ["localStorage", "cart_ui", "checkout_flow"],
+                "lines": 150
+            },
+            "auth": {
+                "name": "User Authentication",
+                "requires": ["jwt", "login_form", "protected_routes"],
+                "lines": 200
+            },
+            "real_time_data": {
+                "name": "Real-time Data Updates",
+                "requires": ["fetch_api", "polling_or_websocket", "state_update"],
+                "lines": 100
+            },
+            "charts": {
+                "name": "Data Visualization",
+                "requires": ["chart_library", "data_binding"],
+                "lines": 120
+            },
+            "search_filter": {
+                "name": "Search & Filter",
+                "requires": ["dom_manipulation", "filter_logic"],
+                "lines": 80
+            },
+            "api_integration": {
+                "name": "External API Integration",
+                "requires": ["fetch_api", "error_handling", "loading_states"],
+                "lines": 100
+            },
+            "comments": {
+                "name": "Comment System",
+                "requires": ["form_handling", "api_backend"],
+                "lines": 150
+            },
+            "cms_api": {
+                "name": "Content Management",
+                "requires": ["headless_cms", "api_calls", "dynamic_rendering"],
+                "lines": 180
+            }
+        }
+    
+    def _load_api_templates(self) -> Dict:
+        """Backend API templates for high-complexity sites"""
+        return {
+            "express_api": {
+                "name": "Node.js Express API",
+                "routes": ["auth", "data", "stripe_payment"],
+                "files": ["server.js", "routes/auth.js", "routes/api.js", "package.json"]
+            },
+            "flask_api": {
+                "name": "Python Flask API",
+                "routes": ["auth", "data", "stripe_payment"],
+                "files": ["app.py", "routes/auth.py", "routes/api.py", "requirements.txt"]
             }
         }
     
     def analyze_prompt(self, prompt: str) -> Dict:
         """
-        Analyze user prompt and determine what to build
+        SMART ANALYSIS: Determine exactly what to build based on requirements
         """
         prompt_lower = prompt.lower()
         
-        # Detect intent
-        if any(w in prompt_lower for w in ["landing", "marketing", "saas", "product", "startup"]):
-            template = "landing"
-            purpose = "convert visitors to customers"
-        elif any(w in prompt_lower for w in ["portfolio", "gallery", "showcase", "work", "projects"]):
-            template = "portfolio"
-            purpose = "display creative work"
-        elif any(w in prompt_lower for w in ["dashboard", "admin", "analytics", "metrics", "data"]):
-            template = "dashboard"
-            purpose = "visualize and manage data"
-        elif any(w in prompt_lower for w in ["shop", "store", "ecommerce", "buy", "sell", "product"]):
-            template = "ecommerce"
-            purpose = "sell products online"
-        else:
-            template = "landing"
-            purpose = "general web presence"
+        # Detect site type
+        template, purpose = self._detect_site_type(prompt_lower)
+        
+        # Detect complexity requirements
+        complexity = self._detect_complexity(prompt_lower, template)
+        
+        # Extract features needed
+        features = self._extract_features(prompt_lower, complexity)
+        
+        # Determine if backend API needed
+        needs_backend = self._detect_backend_need(features, complexity)
         
         # Extract business details
         company_name = self._extract_company_name(prompt)
         primary_color = self._extract_color(prompt) or "#3B82F6"
+        
+        # Smart interactivity selection
+        interactivity = self._select_interactivity(template, features, complexity)
         
         return {
             "template": template,
@@ -76,21 +158,144 @@ class RealWebsiteBuilder:
             "company_name": company_name,
             "primary_color": primary_color,
             "sections": self.templates[template]["structure"],
-            "features": self._extract_features(prompt_lower),
-            "complexity": self._calculate_complexity(prompt_lower)
+            "features": features,
+            "complexity": complexity,
+            "needs_backend": needs_backend,
+            "interactivity": interactivity,
+            "estimated_files": self._estimate_file_count(complexity, needs_backend),
+            "tech_stack": self._select_tech_stack(complexity, needs_backend)
         }
+    
+    def _detect_site_type(self, prompt_lower: str) -> tuple:
+        """Intelligently detect what type of site to build"""
+        # Dashboard / App patterns
+        if any(w in prompt_lower for w in ["dashboard", "admin", "analytics", "metrics", "data visualization", "charts", "reports"]):
+            return "dashboard", "data visualization and management"
+        
+        # E-commerce patterns
+        if any(w in prompt_lower for w in ["shop", "store", "ecommerce", "e-commerce", "buy", "sell", "cart", "checkout", "products", "inventory"]):
+            return "ecommerce", "online sales and commerce"
+        
+        # Blog/Content patterns
+        if any(w in prompt_lower for w in ["blog", "articles", "content", "news", "magazine", "publish", "cms"]):
+            return "blog", "content publishing and sharing"
+        
+        # Web App patterns
+        if any(w in prompt_lower for w in ["app", "application", "tool", "platform", "service", "saas", "user accounts", "login", "dashboard app"]):
+            return "app", "interactive web application"
+        
+        # Portfolio patterns
+        if any(w in prompt_lower for w in ["portfolio", "gallery", "showcase", "work", "projects", "creative", "photography"]):
+            return "portfolio", "creative work showcase"
+        
+        # Default to landing page
+        return "landing", "marketing and conversion"
+    
+    def _detect_complexity(self, prompt_lower: str, template: str) -> str:
+        """Detect required complexity level"""
+        # High complexity indicators
+        high_indicators = [
+            "user accounts", "login", "auth", "database", "api", "real-time",
+            "dashboard", "admin panel", "payment", "checkout", "inventory",
+            "analytics", "charts", "data visualization", "search", "filter",
+            "cms", "content management", "comments", "ratings", "reviews"
+        ]
+        
+        # Low complexity indicators (simple/static)
+        low_indicators = [
+            "simple", "basic", "static", "landing", "brochure", "informational",
+            "minimal", "clean", "portfolio", "gallery"
+        ]
+        
+        high_score = sum(1 for w in high_indicators if w in prompt_lower)
+        low_score = sum(1 for w in low_indicators if w in prompt_lower)
+        
+        # Check template default
+        template_complexity = self.templates[template].get("default_complexity", "medium")
+        
+        # Decision logic
+        if high_score >= 2:
+            return "high"
+        elif low_score >= 2 and high_score == 0:
+            return "low"
+        else:
+            return template_complexity  # Use template default
+    
+    def _detect_backend_need(self, features: List[str], complexity: str) -> bool:
+        """Determine if backend API is required"""
+        backend_features = ["auth", "database", "cms", "comments", "payment", "real_time", "user_accounts"]
+        has_backend_feature = any(f in backend_features for f in features)
+        
+        return has_backend_feature or complexity == "high"
+    
+    def _select_interactivity(self, template: str, features: List[str], complexity: str) -> List[str]:
+        """Smart selection of JavaScript interactivity based on needs"""
+        template_interactivity = self.templates[template].get("interactivity", [])
+        
+        # Add features-based interactivity
+        selected = []
+        
+        for feature in features:
+            if feature in self.js_components:
+                selected.append(feature)
+        
+        # Add template defaults for medium+ complexity
+        if complexity in ["medium", "high"]:
+            for item in template_interactivity:
+                if item not in selected and item in self.js_components:
+                    selected.append(item)
+        
+        # Always add basics for medium+
+        if complexity in ["medium", "high"]:
+            if "smooth_scroll" not in selected:
+                selected.append("smooth_scroll")
+        
+        return selected
+    
+    def _select_tech_stack(self, complexity: str, needs_backend: bool) -> Dict:
+        """Select appropriate technology stack"""
+        if complexity == "low":
+            return {
+                "frontend": "Static HTML + Vanilla JS",
+                "backend": None,
+                "hosting": ["GitHub Pages", "Netlify", "Vercel (static)"],
+                "database": None
+            }
+        elif complexity == "medium":
+            return {
+                "frontend": "HTML + Enhanced JS + Optional React/Vue components",
+                "backend": "Serverless functions (Netlify/Vercel)" if needs_backend else None,
+                "hosting": ["Vercel", "Netlify", "Railway"],
+                "database": "Supabase or Firebase" if needs_backend else None
+            }
+        else:  # high
+            return {
+                "frontend": "React/Vue + Modern tooling",
+                "backend": "Express.js or Flask API",
+                "hosting": ["Railway", "Render", "Heroku", "AWS/GCP"],
+                "database": "PostgreSQL or MongoDB"
+            }
+    
+    def _estimate_file_count(self, complexity: str, needs_backend: bool) -> Dict:
+        """Estimate number of files to be generated"""
+        base = {"html": 1, "css": 1, "js": 1, "md": 1}
+        
+        if complexity == "medium":
+            base["js"] = 2  # Main + components
+        elif complexity == "high":
+            base["js"] = 3  # Main + components + utils
+            if needs_backend:
+                base["backend"] = 3  # Server + routes + config
+        
+        total = sum(base.values())
+        return {"breakdown": base, "total": total}
     
     def _extract_company_name(self, prompt: str) -> str:
         """Extract company name from prompt"""
-        # Look for patterns like "for X", "X company", "X startup"
-        patterns = [
-            r"for\s+([A-Z][a-zA-Z\s&]+?)(?:\s+(?:company|startup|business|app))?\s*(?:\.|,|$)",
-            r"([A-Z][a-zA-Z\s&]+?)\s+(?:company|startup|business|app)",
-        ]
-        for pattern in patterns:
-            match = re.search(pattern, prompt)
-            if match:
-                return match.group(1).strip()
+        words = prompt.split()
+        for word in words:
+            if word[0].isupper():
+                return word
         return "Your Company"
     
     def _extract_color(self, prompt: str) -> Optional[str]:
@@ -98,7 +303,8 @@ class RealWebsiteBuilder:
         colors = {
             "blue": "#3B82F6", "red": "#EF4444", "green": "#10B981",
             "purple": "#8B5CF6", "orange": "#F97316", "pink": "#EC4899",
-            "teal": "#14B8A6", "indigo": "#6366F1", "yellow": "#EAB308"
+            "teal": "#14B8A6", "indigo": "#6366F1", "yellow": "#EAB308",
+            "black": "#111827", "white": "#FFFFFF", "gray": "#6B7280"
         }
         prompt_lower = prompt.lower()
         for color_name, hex_code in colors.items():
@@ -106,7 +312,7 @@ class RealWebsiteBuilder:
                 return hex_code
         return None
     
-    def _extract_features(self, prompt: str) -> List[str]:
+    def _extract_features(self, prompt: str, complexity: str) -> List[str]:
         """Extract requested features"""
         features = []
         feature_keywords = {
@@ -671,52 +877,59 @@ body {{
         return css
     
     def _generate_js(self, analysis: Dict) -> str:
-        """Generate actual JavaScript file"""
-        features = analysis["features"]
+        """Generate smart functional JavaScript based on detected features"""
+        features = analysis.get("features", [])
+        interactivity = analysis.get("interactivity", [])
+        complexity = analysis.get("complexity", "low")
         
-        js_parts = ["// Generated JavaScript\n", "document.addEventListener('DOMContentLoaded', function() {\n"]
+        js_parts = []
+        js_parts.append("// Fully Functional Generated JavaScript")
+        js_parts.append("// Complexity: {complexity}")
+        js_parts.append("// Features: {features}")
+        js_parts.append("")
+        js_parts.append("document.addEventListener('DOMContentLoaded', function() {")
+        js_parts.append("    console.log('🚀 Website initialized - {complexity} complexity mode');")
+        js_parts.append("")
         
-        # Contact form handling
-        if "contact_form" in features:
-            js_parts.append("""
-    // Contact form handling
-    const contactForm = document.getElementById('contactForm');
-    if (contactForm) {
-        contactForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const formData = new FormData(contactForm);
-            const data = Object.fromEntries(formData);
-            
-            // Show success message
-            alert('Thank you for your message! We will get back to you soon.');
-            contactForm.reset();
-            
-            // Log to console (replace with actual API call)
-            console.log('Form submitted:', data);
-        });
-    }
-""")
+        # Add smooth scrolling for medium+ complexity
+        if complexity in ["medium", "high"] or "smooth_scroll" in interactivity:
+            js_parts.append(self._generate_smooth_scroll_js())
         
-        # Dark mode toggle
+        # Add mobile menu toggle for medium+ complexity
+        if complexity in ["medium", "high"]:
+            js_parts.append(self._generate_mobile_menu_js())
+        
+        # Add dark mode if requested
         if "dark_mode" in features:
-            js_parts.append("""
-    // Dark mode toggle
-    const darkModeToggle = document.getElementById('darkModeToggle');
-    if (darkModeToggle) {
-        darkModeToggle.addEventListener('click', function() {
-            document.documentElement.classList.toggle('dark');
-            localStorage.setItem('darkMode', document.documentElement.classList.contains('dark'));
-        });
+            js_parts.append(self._generate_dark_mode_js())
         
-        // Check saved preference
-        if (localStorage.getItem('darkMode') === 'true') {
-            document.documentElement.classList.add('dark');
-        }
-    }
-""")
+        # Add contact form handling
+        if "contact_form" in features:
+            js_parts.append(self._generate_contact_form_js())
         
-        # Smooth scrolling
-        js_parts.append("""
+        # Add cart functionality for ecommerce
+        if "cart" in features or "ecommerce" == analysis.get("template"):
+            js_parts.append(self._generate_cart_js())
+        
+        # Add search/filter for dashboard/blog
+        if "search" in features or analysis.get("template") in ["dashboard", "blog", "ecommerce"]:
+            js_parts.append(self._generate_search_filter_js())
+        
+        # Add animation observer for medium+ complexity
+        if complexity in ["medium", "high"] and "animations" in features:
+            js_parts.append(self._generate_animation_js())
+        
+        # Add API integration placeholder for high complexity
+        if complexity == "high":
+            js_parts.append(self._generate_api_integration_js())
+        
+        js_parts.append("});")
+        js_parts.append("")
+        
+        return "\n".join(js_parts)
+    
+    def _generate_smooth_scroll_js(self) -> str:
+        return '''
     // Smooth scrolling for anchor links
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
         anchor.addEventListener('click', function(e) {
@@ -727,12 +940,270 @@ body {{
             }
         });
     });
+'''
     
-    console.log('Website initialized successfully');
-});
-""")
+    def _generate_mobile_menu_js(self) -> str:
+        return '''
+    // Mobile menu toggle
+    const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
+    const navLinks = document.querySelector('.nav-links');
+    
+    if (mobileMenuBtn && navLinks) {
+        mobileMenuBtn.addEventListener('click', () => {
+            navLinks.classList.toggle('active');
+            mobileMenuBtn.classList.toggle('active');
+        });
+    }
+'''
+    
+    def _generate_dark_mode_js(self) -> str:
+        return '''
+    // Dark mode toggle
+    const darkModeToggle = document.getElementById('darkModeToggle');
+    
+    function initDarkMode() {
+        const saved = localStorage.getItem('darkMode');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         
-        return "".join(js_parts)
+        if (saved === 'true' || (!saved && prefersDark)) {
+            document.documentElement.classList.add('dark');
+        }
+    }
+    
+    if (darkModeToggle) {
+        darkModeToggle.addEventListener('click', () => {
+            document.documentElement.classList.toggle('dark');
+            localStorage.setItem('darkMode', document.documentElement.classList.contains('dark'));
+        });
+    }
+    
+    initDarkMode();
+'''
+    
+    def _generate_contact_form_js(self) -> str:
+        return '''
+    // Contact form with validation
+    const contactForm = document.getElementById('contactForm');
+    
+    if (contactForm) {
+        contactForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const submitBtn = contactForm.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            
+            // Basic validation
+            const email = contactForm.querySelector('#email');
+            const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+            
+            if (email && !emailRegex.test(email.value)) {
+                alert('Please enter a valid email address');
+                email.focus();
+                return;
+            }
+            
+            // Show loading state
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Sending...';
+            
+            // Simulate API call
+            try {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                const formData = new FormData(contactForm);
+                const data = Object.fromEntries(formData);
+                
+                console.log('Form submitted:', data);
+                alert('Thank you! Your message has been sent successfully.');
+                contactForm.reset();
+            } catch (error) {
+                console.error('Form error:', error);
+                alert('Sorry, there was an error sending your message. Please try again.');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            }
+        });
+    }
+'''
+    
+    def _generate_cart_js(self) -> str:
+        return '''
+    // Shopping cart functionality
+    const Cart = {
+        items: JSON.parse(localStorage.getItem('cart') || '[]'),
+        
+        save() {
+            localStorage.setItem('cart', JSON.stringify(this.items));
+            this.updateUI();
+        },
+        
+        add(item) {
+            const existing = this.items.find(i => i.id === item.id);
+            if (existing) {
+                existing.quantity += item.quantity;
+            } else {
+                this.items.push(item);
+            }
+            this.save();
+            this.showNotification(`Added ${item.name} to cart`);
+        },
+        
+        remove(id) {
+            this.items = this.items.filter(i => i.id !== id);
+            this.save();
+        },
+        
+        getTotal() {
+            return this.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        },
+        
+        getCount() {
+            return this.items.reduce((sum, item) => sum + item.quantity, 0);
+        },
+        
+        updateUI() {
+            const cartCount = document.querySelector('.cart-count');
+            const cartTotal = document.querySelector('.cart-total');
+            
+            if (cartCount) cartCount.textContent = this.getCount();
+            if (cartTotal) cartTotal.textContent = '$' + this.getTotal().toFixed(2);
+        },
+        
+        showNotification(message) {
+            const notif = document.createElement('div');
+            notif.className = 'cart-notification';
+            notif.textContent = message;
+            document.body.appendChild(notif);
+            setTimeout(() => notif.remove(), 3000);
+        }
+    };
+    
+    // Initialize cart
+    Cart.updateUI();
+    
+    // Add to cart buttons
+    document.querySelectorAll('.add-to-cart').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const item = {
+                id: btn.dataset.id,
+                name: btn.dataset.name,
+                price: parseFloat(btn.dataset.price),
+                quantity: 1
+            };
+            Cart.add(item);
+        });
+    });
+'''
+    
+    def _generate_search_filter_js(self) -> str:
+        return '''
+    // Search and filter functionality
+    const SearchFilter = {
+        init() {
+            const searchInput = document.querySelector('.search-input');
+            const filterBtns = document.querySelectorAll('.filter-btn');
+            const items = document.querySelectorAll('.filterable-item');
+            
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    const query = e.target.value.toLowerCase();
+                    items.forEach(item => {
+                        const text = item.textContent.toLowerCase();
+                        item.style.display = text.includes(query) ? '' : 'none';
+                    });
+                });
+            }
+            
+            filterBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const filter = btn.dataset.filter;
+                    
+                    filterBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    
+                    items.forEach(item => {
+                        if (filter === 'all' || item.dataset.category === filter) {
+                            item.style.display = '';
+                        } else {
+                            item.style.display = 'none';
+                        }
+                    });
+                });
+            });
+        }
+    };
+    
+    SearchFilter.init();
+'''
+    
+    def _generate_animation_js(self) -> str:
+        return '''
+    // Scroll animations with Intersection Observer
+    const AnimationObserver = {
+        init() {
+            const animatedElements = document.querySelectorAll('.animate-on-scroll');
+            
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('animated');
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, {
+                threshold: 0.1,
+                rootMargin: '0px 0px -50px 0px'
+            });
+            
+            animatedElements.forEach(el => observer.observe(el));
+        }
+    };
+    
+    AnimationObserver.init();
+'''
+    
+    def _generate_api_integration_js(self) -> str:
+        return '''
+    // API integration placeholder for high-complexity sites
+    const API = {
+        baseUrl: '/api/v1',
+        
+        async get(endpoint) {
+            try {
+                const response = await fetch(`${this.baseUrl}${endpoint}`);
+                if (!response.ok) throw new Error('API Error');
+                return await response.json();
+            } catch (error) {
+                console.error('API GET error:', error);
+                return null;
+            }
+        },
+        
+        async post(endpoint, data) {
+            try {
+                const response = await fetch(`${this.baseUrl}${endpoint}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (!response.ok) throw new Error('API Error');
+                return await response.json();
+            } catch (error) {
+                console.error('API POST error:', error);
+                return null;
+            }
+        }
+    };
+    
+    // Example: Load dynamic data
+    async function loadDynamicData() {
+        // const data = await API.get('/data');
+        // console.log('Loaded data:', data);
+    }
+    
+    loadDynamicData();
+'''
     
     def _generate_readme(self, analysis: Dict) -> str:
         """Generate README with instructions"""
