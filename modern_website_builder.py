@@ -247,11 +247,11 @@ class ContextAwareTailoring:
         """Select appropriate font based on industry and tone"""
         font_map = {
             IndustryType.TECHNOLOGY: "Inter",
-            IndustryType.FINANCE: "Playfair Display",
+            IndustryType.FINANCE: "Playfair Display" if tone == BrandTone.LUXURY else "Inter",
             IndustryType.HEALTHCARE: "Inter",
             IndustryType.CREATIVE: "Poppins",
             IndustryType.RESTAURANT: "Lora",
-            IndustryType.LUXURY: "Cormorant Garamond"
+            IndustryType.REAL_ESTATE: "Cormorant Garamond"
         }
         return font_map.get(industry, "Inter")
 

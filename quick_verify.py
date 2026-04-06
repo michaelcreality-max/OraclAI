@@ -17,11 +17,11 @@ print(f"\n✓ Python: {sys.version.split()[0]}")
 # Check 2: Key files exist
 key_files = [
     "production_server.py",
-    "preview_server.py",
     "templates/terminal.html",
     "templates/admin.html",
-    "multi_domain/superior_ai_system.py",
-    "website_builder/autonomous_website_builder.py",
+    "real_local_ai.py",
+    "real_financial_service.py",
+    "modern_website_builder.py",
 ]
 
 print("\n📁 File Check:")
@@ -56,15 +56,14 @@ try:
 except:
     print("  ✗ Pandas (pip install pandas)")
 
-# Check 4: Test Superior AI
+# Check 4: Test Real Local AI
 try:
     sys.path.insert(0, '.')
-    from multi_domain.superior_ai_system import SuperiorAI
-    ai = SuperiorAI()
-    result = ai.process("Test")
-    print("\n🧠 SuperiorAI: ✓ Working")
+    from real_local_ai import real_local_ai
+    result = real_local_ai.analyze_requirements("Create a simple website")
+    print(f"\n🧠 Real Local AI: ✓ Working (detected: {result['site_types'][0]['type']})")
 except Exception as e:
-    print(f"\n🧠 SuperiorAI: ✗ Error - {e}")
+    print(f"\n🧠 Real Local AI: ✗ Error - {e}")
 
 # Check 5: Server syntax
 try:
