@@ -84,11 +84,6 @@ def estimate_sentiment(headlines: List[str]) -> float:
     return max(-1.0, min(1.0, raw_score))
 
 
-def fetch_headline_stub(symbol: str) -> Dict[str, Any]:
-    """DEPRECATED: Use fetch_yahoo_finance_news instead for real data."""
-    return fetch_yahoo_finance_news(symbol)
-
-
 def fetch_rss_titles(url: str, limit: int = 8) -> List[str]:
     """Fetch headlines from RSS feed"""
     try:

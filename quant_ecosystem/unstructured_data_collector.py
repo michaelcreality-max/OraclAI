@@ -495,8 +495,33 @@ class UnstructuredDataCollector:
             
             bundle.industry_trends = trends
             
-            # Would fetch competitor data here
-            bundle.competitor_news = []
+            # Fetch competitor news from peer companies
+            competitor_news = []
+            try:
+                peers = info.get('companyPeers', [])
+                if peers:
+                    # Fetch news for top 3 peers
+                    for peer in peers[:3]:
+                        try:
+                            peer_ticker = yf.Ticker(peer)
+                            peer_info = peer_ticker.info
+                            peer_news = peer_ticker.news[:3] if peer_ticker.news else []
+                            
+                            if peer_news:
+                                headlines = [n.get('title', '') for n in peer_news if n.get('title')]
+                                competitor_news.append({
+                                    'symbol': peer,
+                                    'company_name': peer_info.get('longName', peer),
+                                    'headlines': headlines[:3],
+                                    'headline_count': len(headlines)
+                                })
+                        except Exception:
+                            continue  # Skip peers that fail
+                
+                bundle.competitor_news = competitor_news
+            except Exception as e:
+                log.warning(f"Competitor news collection failed: {e}")
+                bundle.competitor_news = []
             
         except Exception as e:
             log.warning(f"Competitive intel collection failed: {e}")

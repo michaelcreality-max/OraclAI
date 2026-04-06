@@ -258,10 +258,75 @@ class QuantitativeAnalysisAgent:
         return score, regime
     
     def _analyze_statistical_arbitrage(self, initial_data: Dict, hist_data: Dict) -> float:
-        """Look for statistical arbitrage signals"""
-        # Would analyze correlations, cointegration, etc.
-        # For now, return neutral
-        return 0.0
+        """
+        Analyze statistical arbitrage signals using price action.
+        Detects mean reversion opportunities based on price deviations.
+        """
+        try:
+            # Get price history
+            prices = hist_data.get("close_prices", [])
+            if len(prices) < 30:
+                return 0.0
+            
+            import numpy as np
+            
+            # Calculate recent price statistics
+            recent_prices = prices[-20:]
+            long_term_mean = np.mean(prices)
+            recent_mean = np.mean(recent_prices)
+            std_dev = np.std(prices)
+            
+            if std_dev == 0:
+                return 0.0
+            
+            current_price = prices[-1]
+            
+            # Calculate z-score (deviation from mean)
+            z_score = (current_price - long_term_mean) / std_dev
+            
+            # Calculate price momentum
+            if len(prices) >= 10:
+                momentum_5d = (prices[-1] - prices[-5]) / prices[-5] if prices[-5] > 0 else 0
+                momentum_10d = (prices[-1] - prices[-10]) / prices[-10] if prices[-10] > 0 else 0
+            else:
+                momentum_5d = 0
+                momentum_10d = 0
+            
+            # Statistical arbitrage signals
+            score = 0.0
+            
+            # Extreme deviation suggests mean reversion
+            if z_score > 2.0 and momentum_5d < 0:
+                # Price is high but momentum turning negative - mean reversion down likely
+                score = -0.3
+            elif z_score < -2.0 and momentum_5d > 0:
+                # Price is low but momentum turning positive - mean reversion up likely
+                score = 0.3
+            elif z_score > 1.5:
+                # Moderately overbought
+                score = -0.15
+            elif z_score < -1.5:
+                # Moderately oversold
+                score = 0.15
+            
+            # Momentum divergence signals
+            if momentum_5d > 0.05 and momentum_10d < 0:
+                # Short-term up but long-term down - possible reversal
+                score -= 0.1
+            elif momentum_5d < -0.05 and momentum_10d > 0:
+                # Short-term down but long-term up - possible reversal
+                score += 0.1
+            
+            # Volatility regime adjustment
+            volatility = hist_data.get("volatility", 0.20)
+            if volatility > 0.40:
+                # High volatility reduces statistical arbitrage effectiveness
+                score *= 0.5
+            
+            return round(score, 4)
+            
+        except Exception:
+            return 0.0
     
     def _calculate_value_factor(self, fundamentals: Dict) -> float:
         """Calculate value factor score"""
