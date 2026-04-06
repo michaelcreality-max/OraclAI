@@ -5786,24 +5786,29 @@ except Exception as e:
 
 # ==================== INITIALIZATION SECTION ====================
 
-# Initialize REAL Local LLM
-log.info("🧠 Initializing REAL Local LLM (185K parameters)...")
-try:
-    from real_local_llm import WebsiteBuilderAI
-    llm_builder = WebsiteBuilderAI()
-    log.info(f"🧠 REAL LLM Ready: {llm_builder.llm._count_parameters():,} parameters")
-    log.info("🧠 Type: Neural Network (NOT pattern matching)")
-except Exception as e:
-    log.error(f"❌ REAL LLM initialization error: {e}")
+# NOTE: Heavy initialization disabled for Railway deployment stability
+# Models are lazy-loaded on first API call instead
 
-# Initialize Modern Website Builder
-log.info("🎨 Initializing Modern Website Builder (12 criteria)...")
-try:
-    from modern_website_builder import ContextAwareTailoring
-    log.info("🎨 Modern Website Builder: Context-aware tailoring ready")
-    log.info("🎨 Criteria: Design standards, Mobile-first, SEO, Branding, Tone control")
-except Exception as e:
-    log.error(f"❌ Modern builder initialization error: {e}")
+# Initialize REAL Local LLM (DISABLED - lazy load on first request)
+# log.info("🧠 Initializing REAL Local LLM (185K parameters)...")
+# try:
+#     from real_local_llm import WebsiteBuilderAI
+#     llm_builder = WebsiteBuilderAI()
+#     log.info(f"🧠 REAL LLM Ready: {llm_builder.llm._count_parameters():,} parameters")
+#     log.info("🧠 Type: Neural Network (NOT pattern matching)")
+# except Exception as e:
+#     log.error(f"❌ REAL LLM initialization error: {e}")
+
+# Initialize Modern Website Builder (DISABLED - lazy load on first request)
+# log.info("🎨 Initializing Modern Website Builder (12 criteria)...")
+# try:
+#     from modern_website_builder import ContextAwareTailoring
+#     log.info("🎨 Modern Website Builder: Context-aware tailoring ready")
+#     log.info("🎨 Criteria: Design standards, Mobile-first, SEO, Branding, Tone control")
+# except Exception as e:
+#     log.error(f"❌ Modern builder initialization error: {e}")
+
+log.info("✅ Server initialization complete (models lazy-loaded on first request)")
 
 
 # Run production server
