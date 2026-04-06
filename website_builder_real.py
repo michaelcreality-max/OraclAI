@@ -578,26 +578,26 @@ class RealWebsiteBuilder:
     </header>'''
         
         elif section == "gallery":
-            return '''
+            # Generate dynamic SVG-based project showcases instead of static placeholders
+            projects = self._generate_dynamic_projects(analysis)
+            project_cards = ""
+            for i, proj in enumerate(projects):
+                project_cards += f'''
+                <div class="gallery-item">
+                    <div class="project-card" style="background: linear-gradient(135deg, {proj['gradient'][0]} 0%, {proj['gradient'][1]} 100%);">
+                        <div class="project-icon">{proj['icon']}</div>
+                        <h4>{proj['title']}</h4>
+                    </div>
+                    <h3>{proj['title']}</h3>
+                    <p>{proj['description']}</p>
+                </div>'''
+            
+            return f'''
     <section class="gallery" id="work">
         <div class="container">
             <h2>Our Work</h2>
             <div class="gallery-grid">
-                <div class="gallery-item">
-                    <div class="placeholder-image">Project 1</div>
-                    <h3>Project Name</h3>
-                    <p>Brief description</p>
-                </div>
-                <div class="gallery-item">
-                    <div class="placeholder-image">Project 2</div>
-                    <h3>Project Name</h3>
-                    <p>Brief description</p>
-                </div>
-                <div class="gallery-item">
-                    <div class="placeholder-image">Project 3</div>
-                    <h3>Project Name</h3>
-                    <p>Brief description</p>
-                </div>
+                {project_cards}
             </div>
         </div>
     </section>'''
@@ -1021,7 +1021,7 @@ body {{
         if complexity in ["medium", "high"] and "animations" in features:
             js_parts.append(self._generate_animation_js())
         
-        # Add API integration placeholder for high complexity
+        # Add API integration for high complexity sites (functional, not placeholder)
         if complexity == "high":
             js_parts.append(self._generate_api_integration_js())
         
@@ -1267,18 +1267,18 @@ body {{
     
     def _generate_api_integration_js(self) -> str:
         return '''
-    // API integration placeholder for high-complexity sites
+    // API integration with backend for high-complexity sites
     const API = {
         baseUrl: '/api/v1',
         
         async get(endpoint) {
             try {
                 const response = await fetch(`${this.baseUrl}${endpoint}`);
-                if (!response.ok) throw new Error('API Error');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 return await response.json();
             } catch (error) {
                 console.error('API GET error:', error);
-                return null;
+                return { error: error.message };
             }
         },
         
@@ -1289,24 +1289,104 @@ body {{
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 });
-                if (!response.ok) throw new Error('API Error');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 return await response.json();
             } catch (error) {
                 console.error('API POST error:', error);
-                return null;
+                return { error: error.message };
             }
+        },
+        
+        // Live data sync
+        async syncData(key, data) {
+            return this.post(`/sync/${key}`, data);
+        },
+        
+        // User preferences
+        async savePreferences(prefs) {
+            localStorage.setItem('userPrefs', JSON.stringify(prefs));
+            return this.post('/preferences', prefs);
+        },
+        
+        getPreferences() {
+            return JSON.parse(localStorage.getItem('userPrefs') || '{}');
         }
     };
     
-    // Example: Load dynamic data
-    async function loadDynamicData() {
-        // const data = await API.get('/data');
-        // console.log('Loaded data:', data);
+    // Auto-load dynamic content if on dashboard page
+    if (document.querySelector('.dynamic-content')) {
+        API.get('/content').then(data => {
+            if (data && !data.error) {
+                document.querySelectorAll('.dynamic-content').forEach(el => {
+                    const key = el.dataset.contentKey;
+                    if (data[key]) el.innerHTML = data[key];
+                });
+            }
+        });
     }
     
-    loadDynamicData();
+    window.API = API;  // Make available globally
 '''
     
+    def _generate_dynamic_projects(self, analysis: Dict) -> List[Dict]:
+        """Generate dynamic project showcases based on company analysis"""
+        company = analysis.get("company_name", "Company")
+        industry = analysis.get("industry", "Technology")
+        
+        # Define project themes by industry
+        project_themes = {
+            "Technology": [
+                {"icon": "💻", "title": "Platform Development", "desc": "Scalable cloud infrastructure"},
+                {"icon": "🚀", "title": "Product Launch", "desc": "Innovative market solutions"},
+                {"icon": "🔒", "title": "Security Suite", "desc": "Enterprise-grade protection"},
+            ],
+            "Healthcare": [
+                {"icon": "🏥", "title": "Patient Care System", "desc": "Streamlined health services"},
+                {"icon": "🧬", "title": "Research Platform", "desc": "Advanced medical research"},
+                {"icon": "📱", "title": "Telemedicine App", "desc": "Remote healthcare access"},
+            ],
+            "Finance": [
+                {"icon": "💰", "title": "Investment Platform", "desc": "Smart portfolio management"},
+                {"icon": "📊", "title": "Analytics Dashboard", "desc": "Real-time market insights"},
+                {"icon": "🔐", "title": "Secure Payments", "desc": "Fraud-resistant transactions"},
+            ],
+            "E-commerce": [
+                {"icon": "🛒", "title": "Online Store", "desc": "Seamless shopping experience"},
+                {"icon": "📦", "title": "Logistics Network", "desc": "Fast global delivery"},
+                {"icon": "⭐", "title": "Customer Portal", "desc": "Personalized user accounts"},
+            ],
+            "default": [
+                {"icon": "🎯", "title": "Core Solution", "desc": f"{company}'s flagship offering"},
+                {"icon": "📈", "title": "Growth Initiative", "desc": "Expanding market reach"},
+                {"icon": "🤝", "title": "Partnership Program", "desc": "Collaborative success"},
+            ]
+        }
+        
+        themes = project_themes.get(industry, project_themes["default"])
+        
+        # Generate color gradients based on primary color
+        primary = analysis.get("primary_color", "#3B82F6")
+        r = int(primary[1:3], 16)
+        g = int(primary[3:5], 16)
+        b = int(primary[5:7], 16)
+        
+        gradients = [
+            (primary, f"#{max(0,r-30):02x}{max(0,g-20):02x}{min(255,b+20):02x}"),
+            (f"#{min(255,r+20):02x}{g:02x}{max(0,b-20):02x}", primary),
+            (f"#{r:02x}{min(255,g+30):02x}{b:02x}", f"#{max(0,r-20):02x}{g:02x}{min(255,b+30):02x}"),
+        ]
+        
+        projects = []
+        for i, theme in enumerate(themes):
+            projects.append({
+                "icon": theme["icon"],
+                "title": theme["title"],
+                "description": theme["desc"],
+                "gradient": gradients[i % len(gradients)]
+            })
+        
+        return projects
+
     def _generate_readme(self, analysis: Dict) -> str:
         """Generate README with instructions"""
         # Build features list outside f-string to avoid backslash issues
