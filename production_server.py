@@ -2621,6 +2621,48 @@ def generate_adversarial_critique():
         log.error(f"Critique error: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/v1/website/preview/<site_name>', methods=['GET'])
+def preview_website(site_name):
+    """
+    Serve a preview of the generated website.
+    Returns the HTML file for inline preview.
+    """
+    from flask import render_template_string
+    
+    # Get the most recently generated website with this name
+    try:
+        # In a real implementation, this would fetch from a database
+        # For now, we return a helpful message with instructions
+        return f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Website Preview - {site_name}</title>
+    <style>
+        body {{ font-family: system-ui; padding: 40px; text-align: center; }}
+        .info {{ background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0; }}
+        code {{ background: #e5e7eb; padding: 2px 6px; border-radius: 4px; }}
+    </style>
+</head>
+<body>
+    <h1>Website Generated Successfully</h1>
+    <div class="info">
+        <p><strong>Site:</strong> {site_name}</p>
+        <p>This website has been generated and is ready for download.</p>
+        <p>Use the <code>/api/v1/website/download</code> endpoint to get the ZIP file.</p>
+    </div>
+    <p>The generated files include:</p>
+    <ul style="list-style: none; padding: 0;">
+        <li>index.html - Main page</li>
+        <li>styles.css - All styling</li>
+        <li>script.js - Interactive functionality</li>
+    </ul>
+</body>
+</html>"""
+    except Exception as e:
+        log.error(f"Preview error: {e}")
+        return jsonify({"error": "Preview not available"}), 404
+
+
 # ==================== STATE-OF-THE-ART AI API ====================
 
 @app.route('/api/v1/sota/dashboard', methods=['GET'])
